@@ -256,14 +256,16 @@ const function targetPathFor(flags: Flags): string
 end
 
 function Commands.add(text: string, flags: Flags, context: Context)
-	const spec, alias = Commands.parseSpec(text)
+	-- 버튼을 누를 때 입력창에 "add ..." 를 그대로 써둔 경우
+	const spec, alias = Commands.parseSpec((string.gsub(text, "^%s*[aA][dD][dD]%s+", "")))
 	if spec == "" then
 		error("패키지를 입력해주세요 (예: cayasde/vide-opinionated)", 0)
 	end
 	Installer.add(spec, alias, targetPathFor(flags), context.log)
 end
 
-function Commands.remove(text: string, context: Context)
+function Commands.remove(rawText: string, context: Context)
+	const text = string.gsub(rawText, "^%s*[rR][eE][mM][oO][vV][eE]%s+", "")
 	if trim(text) == "" then
 		const target = selected()
 		if target and Linker.isManaged(target) and target.Parent then

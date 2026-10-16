@@ -54,7 +54,7 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 | Remove | 입력한 별칭이나 패키지 삭제, 입력이 비어 있으면 Explorer 에서 선택한 패키지 삭제 |
 | Install All | Config 대로 설치. Config 에 없는 것 (플러그인이 만든 것만) 은 지움 (`wally install` 과 비슷) |
 | Prune | 안 쓰는 `_Index` 폴더 정리. Remove 할 때 자동으로 하므로 thunk 를 손으로 지웠을 때만 필요 |
-| Import File | 파일 선택 창. Config 아래에 보관하고 Config 에 추가한 뒤, Explorer 에서 선택한 곳(없으면 shared 경로)에 설치 |
+| Import File | 파일 선택 창. Config 아래에 보관하고 Config 에 추가한 뒤 shared 경로에 설치 (다른 곳은 `import --selected` / `--to`) |
 | Open Config | Config 스크립트 열기 |
 | Set Shared Path / Set Server Path | Explorer 에서 선택한 폴더(없으면 입력한 경로)로 설정 |
 | List / Help | 설치한 패키지 목록 / 명령어 도움말 |

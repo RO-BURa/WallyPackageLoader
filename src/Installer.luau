@@ -38,7 +38,7 @@ function Installer.resolve(spec: string): Package
 		const body, ref = string.match(github, "^([^#]+)#(.+)$")
 		const target = body or github
 		const path, range = string.match(target, "^([^@]+)@(.+)$")
-		const owner, repo = string.match(path or target, "^([^/]+)/([^/]+)$")
+		const owner, repo = string.match(path or target, "^([%w_%-%.]+)/([%w_%-%.]+)$")
 		if not owner then
 			error(`잘못된 GitHub 스펙: {spec} (예: gh:owner/repo@^1.0)`, 0)
 		end
@@ -47,9 +47,10 @@ function Installer.resolve(spec: string): Package
 
 	const body = string.match(trimmed, "^wally:(.+)$") or trimmed
 	const path, range = string.match(body, "^([^@]+)@(.+)$")
-	const scope, name = string.match(path or body, "^([^/]+)/([^/]+)$")
+	-- Wally 이름은 영문/숫자/-/_ 만 (공백 등이 있으면 요청 전에 막음)
+	const scope, name = string.match(path or body, "^([%w_%-]+)/([%w_%-]+)$")
 	if not scope then
-		error(`잘못된 스펙: {spec} (예: sleitnick/signal@^2)`, 0)
+		error(`잘못된 패키지: '{spec}' (예: sleitnick/signal@^2)`, 0)
 	end
 	return Wally.resolve(scope, name, range)
 end
