@@ -17,6 +17,8 @@ export type Context = {
 	-- RichText 서식이 들어간 줄 (Fmt 사용)
 	rich: (markup: string) -> (),
 	clear: () -> (),
+	-- 비밀번호 입력 받기 (입력창이 * 로 가려짐). 비우고 Enter 면 nil
+	secret: (prompt: string) -> string?,
 }
 
 export type Flags = {
@@ -26,7 +28,7 @@ export type Flags = {
 	-- publish 용 (미리보기 본 것을 올림 / 취소)
 	yes: boolean?,
 	no: boolean?,
-	-- login 용 (주의 사항, privacy, terms 에 동의 / 토큰을 Studio 설정에 저장)
+	-- login 용 (주의 사항, privacy, terms 에 동의 / 토큰을 비밀번호로 암호화해서 저장)
 	agree: boolean?,
 	remember: boolean?,
 }
@@ -53,6 +55,7 @@ const COMMAND_ORDER = {
 	"config",
 	"login",
 	"logout",
+	"unlock",
 	"whoami",
 	"cancel",
 	"publish",
@@ -129,7 +132,7 @@ const HELP: { [string]: HelpEntry } = {
 		usage = { "clear" },
 	},
 	login = {
-		summary = "GitHub 로그인 (토큰은 이 컴퓨터에만 저장)",
+		summary = "GitHub 로그인 (토큰은 플레이스에 절대 안 들어감)",
 		usage = { "login --agree [--remember]", "login <토큰> --agree [--remember]" },
 		args = {
 			{ "(없음)", "기기 로그인: 나오는 주소에서 코드를 입력하고 승인. Wally 업로드 + GitHub 요청 한도 증가" },
@@ -137,7 +140,15 @@ const HELP: { [string]: HelpEntry } = {
 		},
 		options = {
 			{ "--agree", "주의 사항과 privacy / terms 를 읽고 동의함. 없으면 주의 사항만 보여주고 로그인 안 함" },
-			{ "--remember", "토큰을 이 컴퓨터의 Studio 설정에 저장해서 다음에도 로그인 유지 (다른 로컬 플러그인이 읽을 수 있음). 없으면 Studio 를 끄면 로그아웃" },
+			{ "--remember", "로그인 후 비밀번호(10자 이상)를 정해서 토큰을 암호화해 이 컴퓨터에 저장. 다음에는 unlock 으로 풂. 없으면 Studio 를 끄면 로그아웃" },
+		},
+	},
+	unlock = {
+		summary = "--remember 로 저장한 로그인을 비밀번호로 풀기 (Studio 를 켤 때마다)",
+		usage = { "unlock" },
+		notes = {
+			"비밀번호는 입력창에 * 로 가려지고 로그와 입력 기록에 남지 않음",
+			"비밀번호를 잊었으면 logout 후 다시 login --agree --remember",
 		},
 	},
 	logout = {
@@ -485,14 +496,34 @@ end
 -- 로그인할 때마다 보여주는 주의 사항
 const LOGIN_WARNINGS = {
 	"경고: 토큰은 기본적으로 Studio 를 끌 때까지만 기억하고, 플레이스(Config 등)에는 절대 안 들어감",
-	"경고: --remember 를 붙이면 이 컴퓨터의 Studio 설정에 저장해서 다음에도 로그인 유지. 대신 다른 로컬 플러그인이 읽을 수 있음",
+	"경고: --remember 를 붙이면 비밀번호로 암호화해서 이 컴퓨터의 Studio 설정에 저장 (다음에는 unlock). 비밀번호가 짧거나 흔하면 풀릴 수 있음",
 	"경고: 공용 PC 라면 다 쓴 뒤 logout 해주세요",
 	"경고: login <토큰> 은 권한(scope) 없이 만든 토큰을 쓰는 걸 추천",
 	"경고: Wally 업로드(publish --yes)는 되돌릴 수 없음 (같은 버전 재업로드, 삭제 불가)",
 }
 
-const function rememberText(flags: Flags): string
-	return if flags.remember then "이 컴퓨터에 저장됨" else "Studio 를 끄면 로그아웃"
+-- 비밀번호를 두 번 받아서 지금 토큰을 암호화해 저장. 취소하면 이번 세션만 로그인
+const function rememberLogin(context: Context): string
+	while true do
+		const password = context.secret(`저장할 비밀번호 ({Auth.MIN_PASSWORD_LENGTH}자 이상, 비우고 Enter 면 저장 안 함)`)
+		if not password then
+			return "저장 안 함, Studio 를 끄면 로그아웃"
+		end
+		if #password < Auth.MIN_PASSWORD_LENGTH then
+			context.log(`경고: 비밀번호는 {Auth.MIN_PASSWORD_LENGTH}자 이상`)
+		else
+			const again = context.secret("비밀번호 한 번 더")
+			if not again then
+				return "저장 안 함, Studio 를 끄면 로그아웃"
+			end
+			if again == password then
+				context.log("확인 중: 암호화하는 중...")
+				const seconds = Auth.save(password)
+				return `비밀번호로 암호화해서 이 컴퓨터에 저장, {string.format("%.1f", seconds)}초. 다음에는 unlock`
+			end
+			context.log("경고: 두 비밀번호가 다름. 다시 입력해주세요")
+		end
+	end
 end
 
 -- 로그인할 때마다 주의 사항을 보여주고, --agree 로 동의해야 진행
@@ -505,18 +536,43 @@ function Commands.login(token: string?, flags: Flags, context: Context)
 		context.log(if token then "예: login <토큰> --agree" else "예: login --agree")
 		return
 	end
+	local user: string
+	local kindText: string
 	if token then
-		Auth.setToken(token, "token", flags.remember)
-		const ok, user = pcall(Auth.whoami)
+		Auth.setToken(token, "token")
+		const ok, result = pcall(Auth.whoami)
 		if not ok then
 			Auth.clear()
-			error(`토큰이 맞지 않음: {user}`, 0)
+			error(`토큰이 맞지 않음: {result}`, 0)
 		end
-		context.log(`완료: {user} 로 로그인 (토큰, GitHub 요청 한도만 늘어남, {rememberText(flags)})`)
+		user = result
+		kindText = "토큰, GitHub 요청 한도만 늘어남"
+	else
+		Auth.deviceLogin(context.log)
+		user = Auth.whoami()
+		kindText = "기기 로그인"
+	end
+	const saved = if flags.remember then rememberLogin(context) else "Studio 를 끄면 로그아웃"
+	context.log(`완료: {user} 로 로그인 ({kindText}, {saved})`)
+end
+
+-- 저장한 로그인 풀기
+function Commands.unlock(context: Context)
+	if Auth.getToken() then
+		context.log("이미 로그인됨 (whoami)")
 		return
 	end
-	Auth.deviceLogin(context.log, flags.remember)
-	context.log(`완료: {Auth.whoami()} 로 로그인 (기기 로그인, {rememberText(flags)})`)
+	if not Auth.hasSaved() then
+		error("저장된 로그인이 없음 (login --agree --remember)", 0)
+	end
+	const password = context.secret("비밀번호 (비우고 Enter 면 취소)")
+	if not password then
+		context.log("취소함")
+		return
+	end
+	context.log("확인 중: 푸는 중...")
+	const seconds = Auth.unlock(password)
+	context.log(`완료: {Auth.whoami()} 로 로그인 ({string.format("%.1f", seconds)}초)`)
 end
 
 -- publish 미리보기 한 것 (publish --yes 가 올릴 것)
@@ -623,16 +679,18 @@ function Commands.run(line: string, context: Context)
 		Commands.login(args[1], flags, context)
 	elseif command == "logout" then
 		Auth.clear()
-		context.log("완료: 로그아웃 (저장된 토큰 삭제)")
+		context.log("완료: 로그아웃 (저장된 토큰도 삭제)")
 	elseif command == "cancel" then
 		if Auth.cancelLogin() then
 			context.log("취소 요청함. 곧 멈춤")
 		else
 			context.log("취소할 작업이 없음")
 		end
+	elseif command == "unlock" then
+		Commands.unlock(context)
 	elseif command == "whoami" then
 		context.log(
-			`로그인: {Auth.whoami()} ({if Auth.kind() == "device" then "기기 로그인" else "토큰"}, {if Auth.isRemembered() then "이 컴퓨터에 저장됨" else "Studio 를 끄면 로그아웃"})`
+			`로그인: {Auth.whoami()} ({if Auth.kind() == "device" then "기기 로그인" else "토큰"}, {if Auth.isRemembered() then "암호화해서 이 컴퓨터에 저장됨" else "Studio 를 끄면 로그아웃"})`
 		)
 	elseif command == "publish" then
 		Commands.publish(flags, context)

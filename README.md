@@ -40,7 +40,8 @@ prune                                 안 쓰는 _Index 폴더 정리
 config                                Config 스크립트 열기
 login --agree [--remember]            GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
 login <토큰> --agree [--remember]     직접 만든 GitHub 토큰 (GitHub 요청 한도만)
-logout / whoami                       로그아웃 / 로그인한 계정
+logout / whoami                       로그아웃 (저장된 것도 삭제) / 로그인한 계정
+unlock                                --remember 로 저장한 로그인을 비밀번호로 풀기
 cancel                                기다리는 중인 GitHub 로그인 취소 (다른 작업 중에도 실행됨)
 publish [--yes | --no]                선택한 패키지를 Wally 에 업로드 (패키지 안의 wally.toml 사용)
 clear                                 로그 지우기
@@ -55,8 +56,12 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 
 ### GitHub 로그인 / Wally 업로드
 - 로그인은 명령어로만 합니다. 로그인하면 Logout / Prepare Publish 버튼이 나타납니다.
-- 토큰은 기본적으로 **메모리에만** 있고 Studio 를 끄면 사라집니다. `--remember` 를 붙이면 `plugin:SetSetting` 으로 이 컴퓨터에 저장해서 로그인이 유지되지만,
-  설정은 암호화되지 않고 다른 로컬 플러그인이 읽을 수 있습니다. 플레이스(Config 등)에는 어느 경우에도 들어가지 않습니다.
+- 토큰은 기본적으로 **메모리에만** 있고 Studio 를 끄면 사라집니다. 플레이스(Config 등)에는 어느 경우에도 들어가지 않습니다.
+- `--remember` 를 붙이면 로그인 후 비밀번호(10자 이상, 두 번)를 정하고, 토큰을 그 비밀번호로 **암호화해서** `plugin:SetSetting` 으로 이 컴퓨터에 저장합니다.
+  Studio 를 다시 켜면 `unlock` 으로 비밀번호를 입력해 풉니다. 비밀번호는 입력창에 `*` 로 가려지고 로그와 입력 기록에 남지 않습니다.
+  - 암호화: PBKDF2-HMAC-SHA256 (무작위 salt, 이 컴퓨터에서 약 1초 걸리는 반복 횟수, 최소 2만 번) + HMAC-SHA256 키스트림 + HMAC 태그
+  - 설정 파일을 누가 가져가도 비밀번호 없이는 못 씁니다. 다만 비밀번호가 짧거나 흔하면 무차별 대입으로 풀릴 수 있으니 길게 정해주세요.
+  - 비밀번호를 잊었으면 `logout` 후 다시 `login --agree --remember`.
 - `login <토큰>` 은 로그와 입력 기록에 남지 않습니다.
 - `login` 은 할 때마다 주의 사항을 보여주고, `privacy` / `terms` 를 읽고 동의한다는 뜻으로 `--agree` 를 붙여야 진행합니다.
 - `login --agree`: `wally login` 과 같은 GitHub 기기 로그인입니다 (Wally 의 GitHub OAuth 앱, `read:user` 권한).
@@ -163,7 +168,7 @@ rojo build --plugin WallyPackageLoader.rbxm
 | `src/Auth.luau` | GitHub 로그인 (기기 로그인 / 토큰), 토큰 저장 |
 | `src/Publisher.luau` | Instance -> Wally 패키지 zip, 업로드 |
 | `src/Sources/` | Wally, GitHub, File, manifest(wally.toml / pesde.toml) |
-| `src/Util/` | Inflate(deflate/gzip), Zip(읽기/쓰기), Semver, Toml, Lexer, TypeExports, ConfigEditor, RojoValues(Rojo 속성 값), Vfs |
+| `src/Util/` | Inflate(deflate/gzip), Zip(읽기/쓰기), Crypto(SHA-256, PBKDF2, 토큰 암호화), Semver, Toml, Lexer, TypeExports, ConfigEditor, RojoValues(Rojo 속성 값), Vfs |
 
 ## 아직 안 되는 것
 - pesde 레지스트리 패키지 (`name = "scope/name"` 형식 의존성), GitHub 외 Git 저장소

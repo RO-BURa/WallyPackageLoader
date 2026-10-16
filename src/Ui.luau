@@ -208,7 +208,42 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	end)
 	Log.setSink(log)
 
-	const context: Commands.Context = { plugin = plugin, log = log, rich = rich, clear = clear }
+	-- 비밀번호 입력 (입력창을 * 로 가림, 로그와 기록에 안 남김)
+	local secretWaiter: thread? = nil
+	local secretValue = ""
+	local masking = false
+	const PLACEHOLDER = input.PlaceholderText
+
+	const function secret(prompt: string): string?
+		log(prompt)
+		secretValue = ""
+		secretWaiter = coroutine.running()
+		input.PlaceholderText = "비밀번호 (가려짐)"
+		input.Text = ""
+		task.defer(function()
+			input:CaptureFocus()
+		end)
+		return coroutine.yield()
+	end
+
+	input:GetPropertyChangedSignal("Text"):Connect(function()
+		if not secretWaiter or masking then
+			return
+		end
+		-- 화면에는 * 만. 앞의 * 개수만큼은 원래 글자, 그 뒤는 새로 친 글자
+		const text = input.Text
+		const stars = #(string.match(text, "^%**") :: string)
+		if stars > #secretValue then
+			secretValue ..= string.rep("*", stars - #secretValue)
+		end
+		secretValue = string.sub(secretValue, 1, stars) .. string.sub(text, stars + 1)
+		masking = true
+		input.Text = string.rep("*", #secretValue)
+		input.CursorPosition = #secretValue + 1
+		masking = false
+	end)
+
+	const context: Commands.Context = { plugin = plugin, log = log, rich = rich, clear = clear, secret = secret }
 
 	-- 작업은 하나씩만, 오류는 로그로
 	local busy = false
@@ -217,7 +252,8 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	const function refreshLoginButtons()
 		const loggedIn = Auth.getToken() ~= nil
 		for _, button in loginOnlyButtons do
-			button.Visible = loggedIn
+			-- Logout 은 잠긴 저장 로그인을 지울 때도 필요
+			button.Visible = loggedIn or (button.Text == "Logout" and Auth.hasSaved())
 		end
 	end
 
@@ -241,6 +277,22 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 
 	input.FocusLost:Connect(function(enterPressed)
 		if not enterPressed then
+			return
+		end
+		const waiter = secretWaiter
+		if waiter then
+			const value = secretValue
+			secretWaiter = nil
+			secretValue = ""
+			masking = true
+			input.Text = ""
+			masking = false
+			input.PlaceholderText = PLACEHOLDER
+			logCommand(if value == "" then "(취소)" else "(비밀번호 입력됨)")
+			task.spawn(waiter, if value == "" then nil else value)
+			task.defer(function()
+				input:CaptureFocus()
+			end)
 			return
 		end
 		const line = input.Text
@@ -287,7 +339,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	end)
 
 	input.InputBegan:Connect(function(inputObject)
-		if inputObject.UserInputType ~= Enum.UserInputType.Keyboard or #history == 0 then
+		if inputObject.UserInputType ~= Enum.UserInputType.Keyboard or #history == 0 or secretWaiter then
 			return
 		end
 		if inputObject.KeyCode == Enum.KeyCode.Up then
@@ -375,6 +427,13 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	refreshLoginButtons()
 
 	root.Parent = widget
+
+	if Auth.legacyRemoved() then
+		log("경고: 예전 버전이 암호화 없이 저장한 토큰을 지움. login --agree --remember 로 다시 저장해주세요")
+	end
+	if Auth.hasSaved() then
+		log("저장된 GitHub 로그인이 있음. unlock 으로 풀기")
+	end
 
 	const ok, data = pcall(Config.read)
 	if ok then
