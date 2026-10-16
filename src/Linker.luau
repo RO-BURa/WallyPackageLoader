@@ -19,6 +19,13 @@ const ENTRY_ATTRIBUTE = "PackageLoaderEntry"
 Linker.INDEX_NAME = INDEX_NAME
 Linker.LINK_ATTRIBUTE = LINK_ATTRIBUTE
 Linker.ENTRY_ATTRIBUTE = ENTRY_ATTRIBUTE
+-- ModuleScript 가 아닌 Instance 를 설치 위치에 바로 복사한 것 표시
+Linker.COPY_ATTRIBUTE = "PackageLoaderCopy"
+
+-- 플러그인이 설치 위치에 만든 것 (thunk 또는 복사본)
+function Linker.isManaged(instance: Instance): boolean
+	return instance:GetAttribute(LINK_ATTRIBUTE) ~= nil or instance:GetAttribute(Linker.COPY_ATTRIBUTE) ~= nil
+end
 
 function Linker.entryName(scope: string, name: string, version: string): string
 	return `{scope}_{name}@{version}`
