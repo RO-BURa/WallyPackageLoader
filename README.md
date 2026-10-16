@@ -5,7 +5,7 @@ Roblox Studio 안에서 패키지를 바로 불러오는 플러그인입니다.
 Wally 와 같은 `_Index` 구조로 설치합니다.
 
 ## 기능
-- **Wally**: `sleitnick/signal@^2` 처럼 입력하면 api.wally.run 에서 받아 설치 (의존성 재귀 설치)
+- **Wally**: `sleitnick/signal@^2` 처럼 add 로 Config 에 추가하고 install 로 api.wally.run 에서 받아 설치 (의존성 재귀 설치)
 - **GitHub**: `gh:owner/repo@^1.0` (semver 태그), `gh:owner/repo#main` (브랜치/태그/커밋)
   - `wally.toml` 또는 `pesde.toml` 의 의존성도 같이 설치
   - pesde 는 중앙 레지스트리를 없애고 Git 태그 기반으로 바뀌는 중이라 ([RFC #59](https://github.com/pesde-pkg/pesde/issues/59)) GitHub 소스를 지원
@@ -21,14 +21,14 @@ Wally 와 같은 `_Index` 구조로 설치합니다.
 
 ### 명령어
 ```
-asdf = ro-bura/signal                 명령어 없이 치면 add
-add ro-bura/signal                    별칭 자동 (Signal)
-add asdf = ro-bura/signal@^1          별칭 asdf (ro-bura/signal as asdf 도 됨)
-add <패키지> --server                 server 경로에 설치
-add <패키지> --selected               Explorer 에서 선택한 폴더에 설치
-add <패키지> --to ServerStorage/Libs  지정한 경로에 설치
+vide = cayasde/vide-opinionated       명령어 없이 치면 add
+add cayasde/vide-opinionated          Config 에 추가 (별칭은 원래 이름 vide-opinionated, 버전은 @0.4.3 으로 고정)
+add vide = cayasde/vide-opinionated@^0.4   별칭 vide (... as vide 도 됨)
+add <패키지> --server                 server 경로에 추가
+add <패키지> --selected               Explorer 에서 선택한 폴더에 추가
+add <패키지> --to ServerStorage/Libs  지정한 경로에 추가
 remove asdf  /  remove ro-bura/signal 별칭이나 패키지 이름으로 삭제 (rm 도 됨)
-install                               Config 에 적힌 패키지 전체 설치
+install                               Config 에 적힌 패키지 전체 설치 (add 한 뒤 실행)
 import [--server | --selected | --to <경로>]   파일에서 가져오기
 path shared <경로 | --selected>       shared 경로 설정
 path server <경로 | --selected>       server 경로 설정
@@ -40,10 +40,13 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 ```
 ↑ / ↓ 로 이전에 입력한 명령을 불러옵니다.
 
+`add` 는 `wally add` 처럼 Config 에만 적습니다. 실제 설치는 `install` (Install All 버튼) 로 합니다.
+버전을 안 적으면 찾은 버전으로 고정해서 적습니다 (`cayasde/vide-opinionated` -> `cayasde/vide-opinionated@0.4.3`).
+
 ### 버튼
 | 버튼 | 동작 |
 |---|---|
-| Add / Add to Server / Add to Selected | 입력한 패키지를 shared 경로 / server 경로 / 선택한 폴더에 설치 |
+| Add / Add to Server / Add to Selected | 입력한 패키지를 Config 의 shared / server / 선택한 폴더 목록에 추가 (설치는 Install All) |
 | Remove | 입력한 별칭이나 패키지 삭제, 입력이 비어 있으면 Explorer 에서 선택한 패키지 삭제 |
 | Install All | Config 에 적힌 패키지 전체 설치 (`wally install` 과 비슷) |
 | Prune | 안 쓰는 `_Index` 폴더 정리. Remove 할 때 자동으로 하므로 thunk 를 손으로 지웠을 때만 필요 |
@@ -72,7 +75,8 @@ return {
 ```
 처음 만들 때 맨 아래에 쓸 수 있는 항목 설명이 주석으로 들어갑니다.
 Add / Remove / 경로 설정은 필요한 줄만 고치기 때문에 직접 단 주석과 순서가 그대로 남습니다.
-테이블을 코드로 만드는 등 구조를 알아볼 수 없을 때만 파일 전체를 다시 씁니다 (이때는 주석이 사라짐).
+테이블을 코드로 만드는 등 구조를 알아볼 수 없으면 아무것도 바꾸지 않고 오류를 보여줍니다.
+이름에 `-` 가 있으면 Luau 문법상 `["vide-opinionated"] = "cayasde/vide-opinionated@0.4.3"` 처럼 적힙니다.
 
 ## 설치 구조
 ```

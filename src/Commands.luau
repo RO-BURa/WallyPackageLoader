@@ -42,16 +42,22 @@ const LOCATION_OPTIONS = {
 
 const HELP: { [string]: HelpEntry } = {
 	add = {
-		summary = "패키지 설치",
+		summary = "Config 에 패키지 추가 (설치는 install)",
 		usage = { "add [<별칭> =] <패키지> [옵션]", "<별칭> = <패키지>" },
 		args = {
-			{ "<별칭>", "thunk 이름. 없으면 패키지 이름 (signal -> Signal)" },
-			{ "<패키지>", "sleitnick/signal@^2      Wally" },
+			{ "<별칭>", "thunk 이름. 없으면 원래 패키지 이름 (vide-opinionated)" },
+			{ "<패키지>", "버전을 안 적으면 찾은 버전으로 고정 (@0.4.3)" },
+			{ "", "sleitnick/signal@^2      Wally" },
 			{ "", "gh:owner/repo@^1         GitHub 태그" },
 			{ "", "gh:owner/repo#main       GitHub 브랜치 / 태그 / 커밋" },
 		},
 		options = LOCATION_OPTIONS,
-		examples = { "add ro-bura/signal", "asdf = ro-bura/signal@^1", "add gh:owner/repo#main --to ServerStorage/Libs" },
+		examples = {
+			"add cayasde/vide-opinionated",
+			"vide = cayasde/vide-opinionated@^0.4",
+			"add gh:owner/repo#main --to ServerStorage/Libs",
+			"install",
+		},
 	},
 	remove = {
 		summary = "패키지 삭제 (rm)",
@@ -64,7 +70,7 @@ const HELP: { [string]: HelpEntry } = {
 		examples = { "remove asdf", "rm ro-bura/signal" },
 	},
 	install = {
-		summary = "Config 에 적힌 패키지 전체 설치",
+		summary = "Config 에 적힌 패키지 전체 설치 (wally install)",
 		usage = { "install" },
 	},
 	import = {
@@ -134,9 +140,13 @@ end
 --   "asdf = ro-bura/signal", "ro-bura/signal as asdf", "ro-bura/signal", 'asdf = "ro-bura/signal",'
 function Commands.parseSpec(text: string): (string, string?)
 	const cleaned = trim((string.gsub(trim(text), ",$", "")))
-	local alias, spec = string.match(cleaned, "^([%a_][%w_]*)%s*=%s*(.+)$")
+	-- Config 에서 그대로 복사한 ["vide-opinionated"] = "..." 형식
+	local alias, spec = string.match(cleaned, "^%[[\"'](.-)[\"']%]%s*=%s*(.+)$")
 	if not alias then
-		spec, alias = string.match(cleaned, "^(.-)%s+as%s+([%a_][%w_]*)$")
+		alias, spec = string.match(cleaned, "^([%a_][%w_%-]*)%s*=%s*(.+)$")
+	end
+	if not alias then
+		spec, alias = string.match(cleaned, "^(.-)%s+as%s+([%a_][%w_%-]*)$")
 	end
 	local result = trim(spec or cleaned)
 	result = string.match(result, "^\"(.*)\"$") or string.match(result, "^'(.*)'$") or result
@@ -219,12 +229,33 @@ const function targetFor(flags: Flags, selectedFallback: boolean?): Instance
 	return Installer.sharedRoot()
 end
 
+-- Config 에만 추가 (설치는 install)
+-- 플래그에 맞는 설치 위치 경로 (폴더를 만들지 않음, add 용)
+const function targetPathFor(flags: Flags): string
+	if flags.to then
+		const service = string.match(flags.to, "^[^/]+") or ""
+		if not pcall(game.GetService, game, service) then
+			error(`알 수 없는 서비스: {service}`, 0)
+		end
+		return flags.to
+	elseif flags.selected then
+		const target = selected()
+		if not target then
+			error("Explorer 에서 폴더를 선택해주세요", 0)
+		end
+		return Config.pathOf(target)
+	elseif flags.server then
+		return Config.getServerPath()
+	end
+	return Config.getSharedPath()
+end
+
 function Commands.add(text: string, flags: Flags, context: Context)
 	const spec, alias = Commands.parseSpec(text)
 	if spec == "" then
-		error("패키지를 입력해주세요 (예: asdf = ro-bura/signal)", 0)
+		error("패키지를 입력해주세요 (예: cayasde/vide-opinionated)", 0)
 	end
-	Installer.install(spec, { alias = alias, location = targetFor(flags), log = context.log })
+	Installer.add(spec, alias, targetPathFor(flags), context.log)
 end
 
 function Commands.remove(text: string, context: Context)
@@ -333,6 +364,7 @@ function Commands.help(context: Context, topic: string?)
 	section(context, "USAGE")
 	context.rich(INDENT .. Fmt.escape("<명령어> [인자] [옵션]"))
 	context.rich(INDENT .. Fmt.escape("<별칭> = <패키지>") .. "     " .. Fmt.color("dim", "명령어 없이 치면 add"))
+	context.rich(INDENT .. Fmt.color("dim", "add 로 Config 에 추가한 뒤 install 로 설치"))
 	section(context, "COMMANDS")
 	const rows = {}
 	for _, name in COMMAND_ORDER do
@@ -362,7 +394,9 @@ function Commands.run(line: string, context: Context)
 		end
 	end
 
-	const command = string.lower(filtered[1])
+	-- "list = foo/list" 처럼 별칭이 명령어와 같아도 = 가 있으면 add
+	const isAssignment = filtered[2] == "=" or string.find(filtered[1], "=", 1, true) ~= nil
+	const command = if isAssignment then "" else string.lower(filtered[1])
 	const args, flags = takeFlags(table.move(filtered, 2, #filtered, 1, {}))
 	const argText = table.concat(args, " ")
 

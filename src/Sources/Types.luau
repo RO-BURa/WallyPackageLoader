@@ -8,6 +8,8 @@ export type Package = {
 	source: "wally" | "github" | "file",
 	scope: string,
 	name: string,
+	-- 별칭을 안 적었을 때 쓸 이름 (없으면 name)
+	displayName: string?,
 	version: string,
 	realm: Realm,
 	-- 별칭 -> 의존성 스펙 ("scope/name@range" 또는 "gh:owner/repo@range")
