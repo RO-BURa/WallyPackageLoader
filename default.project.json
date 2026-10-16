@@ -1,8 +1,22 @@
 {
   "name": "WallyPackageLoader",
   "syncRules": [
-    { "pattern": "LICENSE", "use": "text" },
-    { "pattern": "THIRD_PARTY_NOTICES", "use": "text" }
+    {
+      "pattern": "LICENSE",
+      "use": "text"
+    },
+    {
+      "pattern": "THIRD_PARTY_NOTICES",
+      "use": "text"
+    },
+    {
+      "pattern": "PRIVACY.md",
+      "use": "text"
+    },
+    {
+      "pattern": "TERMS.md",
+      "use": "text"
+    }
   ],
   "tree": {
     "$path": "src",
@@ -11,6 +25,12 @@
     },
     "THIRD_PARTY_NOTICES": {
       "$path": "THIRD_PARTY_NOTICES"
+    },
+    "PRIVACY": {
+      "$path": "PRIVACY.md"
+    },
+    "TERMS": {
+      "$path": "TERMS.md"
     }
   }
 }

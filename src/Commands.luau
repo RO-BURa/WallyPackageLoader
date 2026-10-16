@@ -53,6 +53,8 @@ const COMMAND_ORDER = {
 	"publish",
 	"clear",
 	"license",
+	"privacy",
+	"terms",
 	"help",
 }
 
@@ -149,6 +151,14 @@ const HELP: { [string]: HelpEntry } = {
 			{ "--yes", "실제로 업로드. 없으면 올릴 내용만 보여줌. 같은 버전은 다시 못 올리고 올린 건 못 지움" },
 		},
 		examples = { "publish ro-bura/signal@1.0.0", "publish ro-bura/signal@1.0.0 --deps --yes" },
+	},
+	privacy = {
+		summary = "개인정보 처리 안내 (토큰을 어디에 저장하고 어디로 보내는지)",
+		usage = { "privacy" },
+	},
+	terms = {
+		summary = "이용 약관",
+		usage = { "terms" },
 	},
 	license = {
 		summary = "라이선스와 참고한 프로젝트 고지",
@@ -453,6 +463,7 @@ const LOGIN_WARNINGS = {
 	"경고: 공용 PC 라면 다 쓴 뒤 logout 해주세요",
 	"경고: login <토큰> 은 권한(scope) 없이 만든 토큰을 쓰는 걸 추천",
 	"경고: Wally 업로드(publish --yes)는 되돌릴 수 없음 (같은 버전 재업로드, 삭제 불가)",
+	"자세한 내용은 privacy / terms",
 }
 
 function Commands.login(token: string?, context: Context)
@@ -559,6 +570,10 @@ function Commands.run(line: string, context: Context)
 		context.log(`로그인: {Auth.whoami()} ({if Auth.kind() == "device" then "기기 로그인" else "토큰"})`)
 	elseif command == "publish" then
 		Commands.publish(args[1], flags, context)
+	elseif command == "privacy" then
+		context.rich(Fmt.escape(LicenseText.privacy()))
+	elseif command == "terms" then
+		context.rich(Fmt.escape(LicenseText.terms()))
 	elseif command == "license" then
 		context.rich(Fmt.escape(LicenseText.text()))
 	elseif command == "help" or command == "?" then

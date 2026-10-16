@@ -377,9 +377,17 @@ function Config.addDependency(alias: string, value: Source, location: string): S
 	return previous
 end
 
--- Config 모듈 (Import 한 것을 보관하는 곳)
+-- Import 한 것을 보관하는 곳 (Config 안의 Imported 폴더, LICENSE 등과 안 겹치게)
+const STORAGE_NAME = "Imported"
 function Config.storage(): Instance
-	return Config.getModule()
+	const module = Config.getModule()
+	local folder = module:FindFirstChild(STORAGE_NAME)
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = STORAGE_NAME
+		folder.Parent = module
+	end
+	return folder
 end
 
 function Config.removeDependency(alias: string, location: string)
