@@ -53,6 +53,7 @@ const COMMAND_ORDER = {
 	"login",
 	"logout",
 	"whoami",
+	"cancel",
 	"publish",
 	"clear",
 	"license",
@@ -141,6 +142,10 @@ const HELP: { [string]: HelpEntry } = {
 	logout = {
 		summary = "GitHub 로그아웃 (저장된 토큰 삭제)",
 		usage = { "logout" },
+	},
+	cancel = {
+		summary = "기다리는 중인 GitHub 로그인 취소",
+		usage = { "cancel" },
 	},
 	whoami = {
 		summary = "로그인한 GitHub 계정",
@@ -587,6 +592,12 @@ function Commands.run(line: string, context: Context)
 	elseif command == "logout" then
 		Auth.clear()
 		context.log("완료: 로그아웃 (저장된 토큰 삭제)")
+	elseif command == "cancel" then
+		if Auth.cancelLogin() then
+			context.log("취소 요청함. 곧 멈춤")
+		else
+			context.log("취소할 작업이 없음")
+		end
 	elseif command == "whoami" then
 		context.log(
 			`로그인: {Auth.whoami()} ({if Auth.kind() == "device" then "기기 로그인" else "토큰"}, {if Auth.isRemembered() then "이 컴퓨터에 저장됨" else "Studio 를 끄면 로그아웃"})`

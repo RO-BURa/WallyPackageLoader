@@ -105,40 +105,84 @@ const function wallyClientId(): string
 	return FALLBACK_CLIENT_ID
 end
 
--- GitHub 기기 로그인. 코드를 보여주고 승인될 때까지 기다림
-function Auth.deviceLogin(log: (string) -> (), remember: boolean?)
-	const clientId = wallyClientId()
-	const device = Http.postJson("https://github.com/login/device/code", {
-		client_id = clientId,
-		scope = "read:user",
-	})
-	if type(device) ~= "table" or not device.device_code then
-		error("GitHub 기기 로그인을 시작할 수 없음", 0)
+-- 기기 로그인 대기 중인지, 취소 요청
+local loginInProgress = false
+local cancelRequested = false
+
+function Auth.isLoggingIn(): boolean
+	return loginInProgress
+end
+
+-- 대기 중인 기기 로그인 취소. 취소할 게 있었으면 true
+function Auth.cancelLogin(): boolean
+	if loginInProgress then
+		cancelRequested = true
+		return true
 	end
+	return false
+end
 
-	log(`1. 브라우저에서 {device.verification_uri} 열기`)
-	log(`2. 코드 입력: {device.user_code}`)
-	log("승인될 때까지 기다리는 중...")
-
-	local interval = device.interval or 5
-	const deadline = os.time() + (device.expires_in or 900)
-	while os.time() < deadline do
-		task.wait(interval)
-		const result = Http.postJson("https://github.com/login/oauth/access_token", {
-			client_id = clientId,
-			device_code = device.device_code,
-			grant_type = "urn:ietf:params:oauth:grant-type:device_code",
-		})
-		if result.access_token then
-			Auth.setToken(result.access_token, "device", remember)
-			return
-		elseif result.error == "slow_down" then
-			interval += 5
-		elseif result.error ~= "authorization_pending" then
-			error(`GitHub 로그인 실패: {result.error_description or result.error}`, 0)
+-- 취소되면 오류, 아니면 seconds 동안 기다림 (1초마다 취소 확인)
+const function waitOrCancel(seconds: number)
+	local waited = 0
+	while waited < seconds do
+		if cancelRequested then
+			error("GitHub 로그인 취소됨", 0)
 		end
+		task.wait(1)
+		waited += 1
 	end
-	error("GitHub 로그인 시간이 지남. 다시 login 해주세요", 0)
+	if cancelRequested then
+		error("GitHub 로그인 취소됨", 0)
+	end
+end
+
+-- GitHub 기기 로그인. 코드를 보여주고 승인될 때까지 기다림 (cancel 로 취소)
+function Auth.deviceLogin(log: (string) -> (), remember: boolean?)
+	if loginInProgress then
+		error("이미 로그인을 기다리는 중 (cancel 로 취소)", 0)
+	end
+	loginInProgress = true
+	cancelRequested = false
+	const ok, err = pcall(function()
+		const clientId = wallyClientId()
+		const device = Http.postJson("https://github.com/login/device/code", {
+			client_id = clientId,
+			scope = "read:user",
+		})
+		if type(device) ~= "table" or not device.device_code then
+			error("GitHub 기기 로그인을 시작할 수 없음", 0)
+		end
+
+		log(`1. 브라우저에서 {device.verification_uri} 열기`)
+		log(`2. 코드 입력: {device.user_code}`)
+		log("승인될 때까지 기다리는 중... (취소: cancel)")
+
+		local interval = device.interval or 5
+		const deadline = os.time() + (device.expires_in or 900)
+		while os.time() < deadline do
+			waitOrCancel(interval)
+			const result = Http.postJson("https://github.com/login/oauth/access_token", {
+				client_id = clientId,
+				device_code = device.device_code,
+				grant_type = "urn:ietf:params:oauth:grant-type:device_code",
+			})
+			if result.access_token then
+				Auth.setToken(result.access_token, "device", remember)
+				return
+			elseif result.error == "slow_down" then
+				interval += 5
+			elseif result.error ~= "authorization_pending" then
+				error(`GitHub 로그인 실패: {result.error_description or result.error}`, 0)
+			end
+		end
+		error("GitHub 로그인 시간이 지남. 다시 login 해주세요", 0)
+	end)
+	loginInProgress = false
+	cancelRequested = false
+	if not ok then
+		error(err, 0)
+	end
 end
 
 return Auth

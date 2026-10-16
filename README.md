@@ -41,6 +41,7 @@ config                                Config 스크립트 열기
 login --agree [--remember]            GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
 login <토큰> --agree [--remember]     직접 만든 GitHub 토큰 (GitHub 요청 한도만)
 logout / whoami                       로그아웃 / 로그인한 계정
+cancel                                기다리는 중인 GitHub 로그인 취소 (다른 작업 중에도 실행됨)
 publish <scope/name@버전> [--server] [--deps] [--yes]   선택한 것을 Wally 에 업로드
 clear                                 로그 지우기
 license                               라이선스와 참고한 프로젝트 고지
