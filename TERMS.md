@@ -7,7 +7,7 @@ By using WallyPackageLoader ("the plugin") you agree to these terms.
 3. **Third-party packages.** Packages installed through the plugin are made by third parties. You are responsible for reviewing them and for following their licenses.
 4. **Publishing.** Packages you publish with `publish --yes` are public and permanent on the Wally registry. You are responsible for what you publish and must have the right to publish it.
 5. **Third-party services.** When you use GitHub or Wally through the plugin, you must also follow their terms of service. You must follow the Roblox Terms of Use when using the plugin in Roblox Studio.
-6. **Your account.** Keep your GitHub token private. Do not use `--remember` on shared computers, and use `logout` when you are done.
+6. **Your account.** Keep your GitHub token and your `--remember` password private. Use a long password, avoid `--remember` on shared computers, and use `logout` when you are done.
 7. **Privacy.** How the plugin handles data is described in the privacy notice (`privacy` command in the plugin).
 8. **Changes.** These terms may be updated with new versions of the plugin.
 9. **Consent.** GitHub login (`login`) only starts after you confirm you have read these terms and the privacy notice (`login --agree`).
