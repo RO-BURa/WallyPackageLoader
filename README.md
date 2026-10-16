@@ -16,19 +16,41 @@ Wally 와 같은 `_Index` 구조로 설치합니다.
 - **정리**: 어디서도 쓰이지 않는 `_Index` 엔트리 삭제 (이 플러그인이 만든 것만, Rojo 로 동기화한 Wally 패키지는 건드리지 않음)
 
 ## 사용법
-입력창에 패키지나 경로를 적고 버튼을 누릅니다. 별칭은 `sleitnick/signal@^2 as Sig` 처럼 지정합니다.
+입력창에 명령을 치고 Enter 를 누르거나, 입력창에 패키지/경로를 적고 버튼을 누릅니다.
+로그는 플러그인 창에만 나오고 Output 창에는 찍지 않습니다.
 
+### 명령어
+```
+asdf = ro-bura/signal                 명령어 없이 치면 add
+add ro-bura/signal                    별칭 자동 (Signal)
+add asdf = ro-bura/signal@^1          별칭 asdf (ro-bura/signal as asdf 도 됨)
+add <패키지> --server                 server 경로에 설치
+add <패키지> --selected               Explorer 에서 선택한 폴더에 설치
+add <패키지> --to ServerStorage/Libs  지정한 경로에 설치
+remove asdf  /  remove ro-bura/signal 별칭이나 패키지 이름으로 삭제 (rm 도 됨)
+install                               Config 에 적힌 패키지 전체 설치
+import [--server | --selected | --to <경로>]   파일에서 가져오기
+path shared <경로 | --selected>       shared 경로 설정
+path server <경로 | --selected>       server 경로 설정
+list                                  설치한 패키지 목록
+prune                                 안 쓰는 _Index 폴더 정리
+config                                Config 스크립트 열기
+clear                                 로그 지우기
+help                                  도움말
+```
+↑ / ↓ 로 이전에 입력한 명령을 불러옵니다.
+
+### 버튼
 | 버튼 | 동작 |
 |---|---|
-| Add | `shared` 경로에 설치 |
-| Add to Server | `server` 경로에 설치 |
-| Add to Selected | Explorer 에서 선택한 폴더에 설치 |
-| Remove | 입력한 별칭 삭제, 입력이 비어 있으면 Explorer 에서 선택한 패키지 삭제 |
+| Add / Add to Server / Add to Selected | 입력한 패키지를 shared 경로 / server 경로 / 선택한 폴더에 설치 |
+| Remove | 입력한 별칭이나 패키지 삭제, 입력이 비어 있으면 Explorer 에서 선택한 패키지 삭제 |
 | Install All | Config 에 적힌 패키지 전체 설치 (`wally install` 과 비슷) |
-| Prune | 안 쓰는 `_Index` 엔트리 정리 |
-| Import File | 파일 선택 창. Explorer 에서 선택한 곳, 없으면 `shared` 경로에 가져옴 |
-| Set Shared Path / Set Server Path | Explorer 에서 선택한 폴더(없으면 입력한 경로)로 설정 |
+| Prune | 안 쓰는 `_Index` 폴더 정리. Remove 할 때 자동으로 하므로 thunk 를 손으로 지웠을 때만 필요 |
+| Import File | 파일 선택 창. Explorer 에서 선택한 곳, 없으면 shared 경로에 가져옴 |
 | Open Config | Config 스크립트 열기 |
+| Set Shared Path / Set Server Path | Explorer 에서 선택한 폴더(없으면 입력한 경로)로 설정 |
+| List / Help | 설치한 패키지 목록 / 명령어 도움말 |
 
 ## 설정 (ServerStorage.PackageLoaderConfig)
 직접 고칠 수 있는 ModuleScript 이고 Team Create 로 공유됩니다. 직접 고친 뒤에는 **Install All** 을 누릅니다.
