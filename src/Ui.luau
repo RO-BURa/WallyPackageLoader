@@ -236,7 +236,10 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		if string.match(line, "^%s*$") then
 			return
 		end
-		if history[#history] ~= line then
+		-- login <토큰> 은 로그와 기록에 토큰이 남지 않게
+		const secret = string.match(line, "^%s*[lL][oO][gG][iI][nN]%s+%S+")
+		const shown = if secret then "login ********" else line
+		if not secret and history[#history] ~= line then
 			table.insert(history, line)
 			if #history > MAX_HISTORY then
 				table.remove(history, 1)
@@ -244,7 +247,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		end
 		historyIndex = #history + 1
 		input.Text = ""
-		logCommand(line)
+		logCommand(shown)
 		task.spawn(run, function()
 			Commands.run(line, context)
 		end)

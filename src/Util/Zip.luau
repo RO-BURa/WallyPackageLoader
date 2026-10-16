@@ -57,4 +57,62 @@ function Zip.extract(data: string): { [string]: string }
 	return files
 end
 
+-- CRC-32 (zip 용)
+local crcTable: { number }? = nil
+const function crc32(data: string): number
+	if not crcTable then
+		const t = {}
+		for i = 0, 255 do
+			local c = i
+			for _ = 1, 8 do
+				c = if bit32.band(c, 1) == 1 then bit32.bxor(0xEDB88320, bit32.rshift(c, 1)) else bit32.rshift(c, 1)
+			end
+			t[i] = c
+		end
+		crcTable = t
+	end
+	const t = crcTable :: { number }
+	local crc = 0xFFFFFFFF
+	for i = 1, #data do
+		crc = bit32.bxor(t[bit32.band(bit32.bxor(crc, string.byte(data, i)), 0xFF)], bit32.rshift(crc, 8))
+	end
+	return bit32.bnot(crc)
+end
+Zip.crc32 = crc32
+
+-- 파일들로 zip 만들기 (압축 없이 저장). paths 순서대로 넣음
+function Zip.create(files: { [string]: string }, paths: { string }?): string
+	const order = paths or (function()
+		const list = {}
+		for path in files do
+			table.insert(list, path)
+		end
+		table.sort(list)
+		return list
+	end)()
+
+	const parts = {}
+	const central = {}
+	local offset = 0
+	for _, path in order do
+		const content = files[path]
+		const crc = crc32(content)
+		const localHeader = string.pack("<I4 I2 I2 I2 I2 I2 I4 I4 I4 I2 I2", 0x04034b50, 20, 0x0800, 0, 0, 0x21, crc, #content, #content, #path, 0)
+		table.insert(parts, localHeader)
+		table.insert(parts, path)
+		table.insert(parts, content)
+		table.insert(
+			central,
+			string.pack("<I4 I2 I2 I2 I2 I2 I2 I4 I4 I4 I2 I2 I2 I2 I2 I4 I4", 0x02014b50, 20, 20, 0x0800, 0, 0, 0x21, crc, #content, #content, #path, 0, 0, 0, 0, 0, offset)
+				.. path
+		)
+		offset += #localHeader + #path + #content
+	end
+
+	const centralData = table.concat(central)
+	table.insert(parts, centralData)
+	table.insert(parts, string.pack("<I4 I2 I2 I2 I2 I4 I4 I2", 0x06054b50, 0, 0, #order, #order, #centralData, offset, 0))
+	return table.concat(parts)
+end
+
 return Zip
