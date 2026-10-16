@@ -12,7 +12,9 @@ The plugin never asks for your Roblox password, cookie or any other Roblox crede
 
 ## Where it is stored
 
-- The GitHub token is stored **only on your computer** with Roblox Studio's plugin settings (`plugin:SetSetting`).
+- By default the GitHub token is kept **only in memory** and is forgotten when Roblox Studio closes.
+- Only if you log in with `--remember`, the token is saved **on your computer** in Roblox Studio's plugin settings (`plugin:SetSetting`) so you stay logged in.
+  Plugin settings are stored unencrypted, and other plugins installed locally on the same computer may be able to read them. Use `--remember` only on a computer you trust.
 - It is **never** saved into the place (including `PackageLoaderConfig`), so it is not shared through Team Create or published places.
 - `PackageLoaderConfig` (in `ServerStorage`) stores only package names, versions and paths, and files you imported. It is part of your place.
 
@@ -31,7 +33,7 @@ Nothing is sent to the plugin author or to any other third party. Every HTTP des
 
 ## Deleting your data
 
-- Run `logout` to delete the stored token from your computer.
+- Run `logout` to forget the token and delete it from your computer if it was saved with `--remember`.
 - To revoke the token on GitHub's side, remove it under GitHub **Settings > Applications** (device login) or **Settings > Developer settings > Personal access tokens** (token login).
 - Packages published to Wally are public and cannot be deleted by this plugin. See Wally's policies for removal requests.
 

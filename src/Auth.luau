@@ -1,4 +1,7 @@
--- GitHub 로그인 (토큰은 plugin:SetSetting 으로 이 컴퓨터에만 저장, 플레이스에는 안 넣음)
+-- GitHub 로그인
+--   토큰은 기본적으로 메모리에만 (Studio 를 끄면 사라짐)
+--   --remember 일 때만 plugin:SetSetting 으로 이 컴퓨터에 저장 (다른 로컬 플러그인이 읽을 수 있음)
+--   플레이스에는 절대 안 넣음
 --   기기 로그인: wally login 과 같은 GitHub Device Flow (Wally 의 OAuth 앱) -> Wally 업로드 + GitHub 요청 한도
 --   토큰 입력: 직접 만든 토큰 -> GitHub 요청 한도만 (Wally 서버는 Wally 앱 토큰만 받음)
 
@@ -30,21 +33,47 @@ const function setSetting(name: string, value: any)
 	end
 end
 
+-- 이번 Studio 세션 동안만 기억하는 토큰
+local memoryToken: string? = nil
+local memoryKind: Kind? = nil
+
 function Auth.getToken(): string?
+	if memoryToken then
+		return memoryToken
+	end
 	const token = setting(TOKEN_SETTING)
 	return if type(token) == "string" and token ~= "" then token else nil
 end
 
 function Auth.kind(): Kind?
+	if memoryToken then
+		return memoryKind
+	end
 	return if Auth.getToken() then setting(KIND_SETTING) else nil
 end
 
-function Auth.setToken(token: string, kind: Kind)
-	setSetting(TOKEN_SETTING, token)
-	setSetting(KIND_SETTING, kind)
+-- 저장된 토큰인지 (--remember)
+function Auth.isRemembered(): boolean
+	const token = setting(TOKEN_SETTING)
+	return type(token) == "string" and token ~= ""
+end
+
+-- remember 가 true 일 때만 Studio 설정에 저장, 아니면 저장돼 있던 것도 지움
+function Auth.setToken(token: string, kind: Kind, remember: boolean?)
+	memoryToken = token
+	memoryKind = kind
+	if remember then
+		setSetting(TOKEN_SETTING, token)
+		setSetting(KIND_SETTING, kind)
+	else
+		setSetting(TOKEN_SETTING, nil)
+		setSetting(KIND_SETTING, nil)
+	end
 end
 
 function Auth.clear()
+	memoryToken = nil
+	memoryKind = nil
 	setSetting(TOKEN_SETTING, nil)
 	setSetting(KIND_SETTING, nil)
 end
@@ -77,7 +106,7 @@ const function wallyClientId(): string
 end
 
 -- GitHub 기기 로그인. 코드를 보여주고 승인될 때까지 기다림
-function Auth.deviceLogin(log: (string) -> ())
+function Auth.deviceLogin(log: (string) -> (), remember: boolean?)
 	const clientId = wallyClientId()
 	const device = Http.postJson("https://github.com/login/device/code", {
 		client_id = clientId,
@@ -101,7 +130,7 @@ function Auth.deviceLogin(log: (string) -> ())
 			grant_type = "urn:ietf:params:oauth:grant-type:device_code",
 		})
 		if result.access_token then
-			Auth.setToken(result.access_token, "device")
+			Auth.setToken(result.access_token, "device", remember)
 			return
 		elseif result.error == "slow_down" then
 			interval += 5
