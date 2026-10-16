@@ -414,7 +414,8 @@ function Installer.remove(alias: string, location: string?, log: ((string) -> ()
 		thunk:Destroy()
 	end
 	Config.removeDependency(alias, path)
-	if stored and stored:IsDescendantOf(Config.storage()) then
+	-- Imported 폴더 또는 예전처럼 Config 바로 아래에 둔 것
+	if stored and stored:IsDescendantOf(Config.getModule()) then
 		stored:Destroy()
 	end
 	Installer.prune(logger)

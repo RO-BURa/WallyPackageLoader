@@ -10,7 +10,7 @@ Wally 와 같은 `_Index` 구조로 설치합니다.
   - `wally.toml` 또는 `pesde.toml` 의 의존성도 같이 설치
   - pesde 는 중앙 레지스트리를 없애고 Git 태그 기반으로 바뀌는 중이라 ([RFC #59](https://github.com/pesde-pkg/pesde/issues/59)) GitHub 소스를 지원
 - **파일에서 가져오기**: `.lua` / `.luau` (여러 개 한 번에 선택 가능), `.zip` (wally.toml 이 있으면 의존성도 설치)
-  - 가져온 것은 `PackageLoaderConfig` 아래에 보관하고 Config 에 `이름 = script.이름` 으로 적은 뒤 설치
+  - 가져온 것은 `PackageLoaderConfig` 안의 `Imported` 폴더에 보관하고 Config 에 `이름 = script.Imported.이름` 으로 적은 뒤 설치
   - 일반 폴더는 Studio API 에 폴더 선택 기능이 없어서 zip 으로 압축해서 가져와야 함
 - **타입 re-export**: thunk 모듈이 패키지의 `export type` 을 다시 export 해서
   `Packages.Signal.Signal<T>` 같은 타입을 바로 사용 가능 (pesde 링커와 같은 방식, `const` 가 있는 소스도 처리)
@@ -44,6 +44,7 @@ logout / whoami                       로그아웃 / 로그인한 계정
 publish <scope/name@버전> [--server] [--deps] [--yes]   선택한 것을 Wally 에 업로드
 clear                                 로그 지우기
 license                               라이선스와 참고한 프로젝트 고지
+privacy / terms                       개인정보 처리 안내 / 이용 약관
 help [명령어]                         도움말 (help add 처럼 자세히)
 ```
 ↑ / ↓ 로 이전에 입력한 명령을 불러옵니다.
@@ -84,7 +85,7 @@ return {
 
 	dependencies = {
 		Signal = "sleitnick/signal@^2",
-		MyLib = script.MyLib,           -- 직접 가져온 것 (Import File)
+		MyLib = script.Imported.MyLib,  -- 직접 가져온 것 (Import File)
 	},
 	serverDependencies = {},
 	custom = {
@@ -153,7 +154,7 @@ rojo build --plugin WallyPackageLoader.rbxm
 - [pesde](https://github.com/pesde-pkg/pesde) (MIT) - thunk 의 타입 re-export 로직 (`src/linking/generator.rs`)
 - [wally-package-types](https://github.com/JohnnyMorganz/wally-package-types) (MIT) - 타입 re-export 아이디어
 
-## 라이선스
-[MIT](LICENSE). 참고한 프로젝트의 고지는 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) 에 있습니다.
-두 파일 모두 빌드할 때 플러그인 안에 StringValue 로 들어가고 (`default.project.json` 의 `syncRules`),
-`license` 명령으로 볼 수 있습니다. `PackageLoaderConfig` 를 처음 만들 때 그 안에 `LICENSE` 모듈도 같이 만듭니다 (지워도 됨).
+## 라이선스 / 개인정보 / 약관
+[MIT](LICENSE). 개인정보 처리 안내는 [PRIVACY.md](PRIVACY.md), 이용 약관은 [TERMS.md](TERMS.md). 참고한 프로젝트의 고지는 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) 에 있습니다.
+네 파일 모두 빌드할 때 플러그인 안에 StringValue 로 들어가고 (`default.project.json` 의 `syncRules`),
+`license` / `privacy` / `terms` 명령으로 볼 수 있습니다. `PackageLoaderConfig` 를 처음 만들 때 그 안에 `LICENSE` 모듈도 같이 만듭니다 (지워도 됨).

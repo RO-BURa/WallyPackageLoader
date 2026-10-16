@@ -1,4 +1,4 @@
--- 플러그인에 같이 빌드되는 LICENSE / THIRD_PARTY_NOTICES (StringValue) 읽기
+-- 플러그인에 같이 빌드되는 LICENSE / THIRD_PARTY_NOTICES / PRIVACY / TERMS (StringValue) 읽기
 
 const LicenseText = {}
 
@@ -23,6 +23,18 @@ function LicenseText.text(): string
 		return "MIT License - https://github.com/RO-BURa/WallyPackageLoader"
 	end
 	return table.concat(parts, "\n\n")
+end
+
+const REPOSITORY = "https://github.com/RO-BURa/WallyPackageLoader"
+
+-- 개인정보 처리 안내 (PRIVACY.md)
+function LicenseText.privacy(): string
+	return readValue("PRIVACY") or `Privacy notice: {REPOSITORY}/blob/master/PRIVACY.md`
+end
+
+-- 이용 약관 (TERMS.md)
+function LicenseText.terms(): string
+	return readValue("TERMS") or `Terms of use: {REPOSITORY}/blob/master/TERMS.md`
 end
 
 return LicenseText
