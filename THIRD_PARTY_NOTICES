@@ -4,7 +4,6 @@ WallyPackageLoader contains code adapted from the projects below.
 
 --------------------------------------------------------------------------------
 zzlib.luau (src/Util/Inflate.luau)
-https://github.com/xhayper/zzlib.luau
 
 Copyright (c) 2016-2024 Francois Galea <fgalea at free.fr>
 Copyright (c) 2024 xhayper
@@ -16,19 +15,16 @@ published by Sam Hocevar.
 
 --------------------------------------------------------------------------------
 roblox-package-manager (Wally API usage, file conversion, config storage)
-https://github.com/McThor2/roblox-package-manager
 
 Copyright (c) 2023 McThor2
 
 --------------------------------------------------------------------------------
 pesde (type re-export logic in src/Util/TypeExports.luau)
-https://github.com/pesde-pkg/pesde
 
 Copyright (c) 2024 daimond113
 
 --------------------------------------------------------------------------------
 wally-package-types (type re-export idea)
-https://github.com/JohnnyMorganz/wally-package-types
 
 Copyright (c) 2022 JohnnyMorganz
 

@@ -20,21 +20,19 @@ function LicenseText.text(): string
 		end
 	end
 	if #parts == 0 then
-		return "MIT License - https://github.com/RO-BURa/WallyPackageLoader"
+		return "MIT License"
 	end
 	return table.concat(parts, "\n\n")
 end
 
-const REPOSITORY = "https://github.com/RO-BURa/WallyPackageLoader"
-
 -- 개인정보 처리 안내 (PRIVACY.md)
 function LicenseText.privacy(): string
-	return readValue("PRIVACY") or `Privacy notice: {REPOSITORY}/blob/master/PRIVACY.md`
+	return readValue("PRIVACY") or "Privacy notice is missing from this build."
 end
 
 -- 이용 약관 (TERMS.md)
 function LicenseText.terms(): string
-	return readValue("TERMS") or `Terms of use: {REPOSITORY}/blob/master/TERMS.md`
+	return readValue("TERMS") or "Terms of use are missing from this build."
 end
 
 return LicenseText

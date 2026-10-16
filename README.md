@@ -38,8 +38,8 @@ path server <경로 | --selected>       server 경로 설정
 list                                  설치한 패키지 목록
 prune                                 안 쓰는 _Index 폴더 정리
 config                                Config 스크립트 열기
-login                                 GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
-login <토큰>                          직접 만든 GitHub 토큰 (GitHub 요청 한도만)
+login --agree                         GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
+login <토큰> --agree                  직접 만든 GitHub 토큰 (GitHub 요청 한도만)
 logout / whoami                       로그아웃 / 로그인한 계정
 publish <scope/name@버전> [--server] [--deps] [--yes]   선택한 것을 Wally 에 업로드
 clear                                 로그 지우기
@@ -54,9 +54,10 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 
 ### GitHub 로그인 / Wally 업로드 (명령어만)
 - 토큰은 `plugin:SetSetting` 으로 **이 컴퓨터에만** 저장되고 플레이스(Config 등)에는 들어가지 않습니다. `login <토큰>` 은 로그와 입력 기록에 남지 않습니다.
-- `login`: `wally login` 과 같은 GitHub 기기 로그인입니다 (Wally 의 GitHub OAuth 앱, `read:user` 권한).
+- `login` 은 할 때마다 주의 사항을 보여주고, `privacy` / `terms` 를 읽고 동의한다는 뜻으로 `--agree` 를 붙여야 진행합니다.
+- `login --agree`: `wally login` 과 같은 GitHub 기기 로그인입니다 (Wally 의 GitHub OAuth 앱, `read:user` 권한).
   나오는 주소(github.com/login/device)에서 코드를 입력하고 승인하면 됩니다.
-- `login <토큰>`: 직접 만든 토큰 (권한 없이 만들어도 됨). GitHub API 요청 한도만 늘어납니다 (시간당 60 -> 5000).
+- `login <토큰> --agree`: 직접 만든 토큰 (권한 없이 만들어도 됨). GitHub API 요청 한도만 늘어납니다 (시간당 60 -> 5000).
   Wally 서버는 Wally 앱으로 받은 토큰만 받기 때문에 업로드는 `login` 으로 해야 합니다.
 - `publish`: Explorer 에서 선택한 것 (보통 패키지 ModuleScript) 을 Rojo 형식 파일 + `wally.toml` + `default.project.json` 으로 묶어 올립니다.
   - ModuleScript / Script / LocalScript -> `.luau`, Folder -> 폴더, StringValue -> `.txt`, 그 외 -> `.rbxm`
@@ -153,6 +154,10 @@ rojo build --plugin WallyPackageLoader.rbxm
 - [roblox-package-manager](https://github.com/McThor2/roblox-package-manager) (MIT) - Wally API 사용법, 파일 변환, 설정 저장 방식
 - [pesde](https://github.com/pesde-pkg/pesde) (MIT) - thunk 의 타입 re-export 로직 (`src/linking/generator.rs`)
 - [wally-package-types](https://github.com/JohnnyMorganz/wally-package-types) (MIT) - 타입 re-export 아이디어
+
+## 마켓 배포 시 참고
+- Roblox 커뮤니티 가이드라인은 외부 사이트 URL 을 링크 / 표시하는 것을 막고 있어서, 플러그인 안의 글(`PRIVACY`, `TERMS`, `THIRD_PARTY_NOTICES`, 오류 메시지)에는 외부 링크를 넣지 않습니다.
+  예외는 기기 로그인에 꼭 필요한 GitHub 로그인 주소 하나입니다. 마켓 설명란에도 링크를 넣지 않습니다.
 
 ## 라이선스 / 개인정보 / 약관
 [MIT](LICENSE). 개인정보 처리 안내는 [PRIVACY.md](PRIVACY.md), 이용 약관은 [TERMS.md](TERMS.md). 참고한 프로젝트의 고지는 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) 에 있습니다.
