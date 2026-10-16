@@ -131,12 +131,21 @@ ReplicatedStorage/Packages/
       promise
 ```
 
-## 빌드
+## 설치
+1. [Releases](https://github.com/RO-BURa/WallyPackageLoader/releases) 에서 최신 `WallyPackageLoader.rbxm` 을 받습니다.
+2. Studio 에서 **Plugins → Plugins Folder** 를 눌러 열린 폴더에 넣습니다.
+3. Studio 를 다시 열면 툴바에 버튼이 생깁니다.
+
+업데이트는 새 `.rbxm` 으로 덮어쓰면 됩니다.
+
+## 빌드 (직접)
 ```bash
 rokit install
 rojo build --plugin WallyPackageLoader.rbxm
 ```
 `--plugin` 은 Studio 의 로컬 플러그인 폴더에 바로 빌드합니다.
+
+`v0.1.0` 같은 태그를 push 하면 GitHub Actions 가 `.rbxm` 을 빌드해서 Release 에 올립니다 (`.github/workflows/release.yml`).
 
 처음 사용할 때 Studio 가 HTTP 요청(api.wally.run, api.github.com, codeload.github.com, 로그인 시 github.com / raw.githubusercontent.com)과
 스크립트 삽입 권한을 물어봅니다.
