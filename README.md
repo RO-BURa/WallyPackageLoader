@@ -38,8 +38,8 @@ path server <경로 | --selected>       server 경로 설정
 list                                  설치한 패키지 목록
 prune                                 안 쓰는 _Index 폴더 정리
 config                                Config 스크립트 열기
-login --agree                         GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
-login <토큰> --agree                  직접 만든 GitHub 토큰 (GitHub 요청 한도만)
+login --agree [--remember]            GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
+login <토큰> --agree [--remember]     직접 만든 GitHub 토큰 (GitHub 요청 한도만)
 logout / whoami                       로그아웃 / 로그인한 계정
 publish <scope/name@버전> [--server] [--deps] [--yes]   선택한 것을 Wally 에 업로드
 clear                                 로그 지우기
@@ -54,7 +54,9 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 
 ### GitHub 로그인 / Wally 업로드
 - 로그인은 명령어로만 합니다. 로그인하면 Logout / Publish 버튼이 나타납니다.
-- 토큰은 `plugin:SetSetting` 으로 **이 컴퓨터에만** 저장되고 플레이스(Config 등)에는 들어가지 않습니다. `login <토큰>` 은 로그와 입력 기록에 남지 않습니다.
+- 토큰은 기본적으로 **메모리에만** 있고 Studio 를 끄면 사라집니다. `--remember` 를 붙이면 `plugin:SetSetting` 으로 이 컴퓨터에 저장해서 로그인이 유지되지만,
+  설정은 암호화되지 않고 다른 로컬 플러그인이 읽을 수 있습니다. 플레이스(Config 등)에는 어느 경우에도 들어가지 않습니다.
+- `login <토큰>` 은 로그와 입력 기록에 남지 않습니다.
 - `login` 은 할 때마다 주의 사항을 보여주고, `privacy` / `terms` 를 읽고 동의한다는 뜻으로 `--agree` 를 붙여야 진행합니다.
 - `login --agree`: `wally login` 과 같은 GitHub 기기 로그인입니다 (Wally 의 GitHub OAuth 앱, `read:user` 권한).
   나오는 주소(github.com/login/device)에서 코드를 입력하고 승인하면 됩니다.

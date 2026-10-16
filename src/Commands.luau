@@ -26,8 +26,9 @@ export type Flags = {
 	-- publish 용
 	deps: boolean?,
 	yes: boolean?,
-	-- login 용 (주의 사항, privacy, terms 에 동의)
+	-- login 용 (주의 사항, privacy, terms 에 동의 / 토큰을 Studio 설정에 저장)
 	agree: boolean?,
+	remember: boolean?,
 }
 
 const Commands = {}
@@ -127,13 +128,14 @@ const HELP: { [string]: HelpEntry } = {
 	},
 	login = {
 		summary = "GitHub 로그인 (토큰은 이 컴퓨터에만 저장)",
-		usage = { "login --agree", "login <토큰> --agree" },
+		usage = { "login --agree [--remember]", "login <토큰> --agree [--remember]" },
 		args = {
 			{ "(없음)", "기기 로그인: 나오는 주소에서 코드를 입력하고 승인. Wally 업로드 + GitHub 요청 한도 증가" },
 			{ "<토큰>", "직접 만든 GitHub 토큰 (권한 없이 만들어도 됨). GitHub 요청 한도만 늘어나고 Wally 업로드는 안 됨" },
 		},
 		options = {
 			{ "--agree", "주의 사항과 privacy / terms 를 읽고 동의함. 없으면 주의 사항만 보여주고 로그인 안 함" },
+			{ "--remember", "토큰을 이 컴퓨터의 Studio 설정에 저장해서 다음에도 로그인 유지 (다른 로컬 플러그인이 읽을 수 있음). 없으면 Studio 를 끄면 로그아웃" },
 		},
 	},
 	logout = {
@@ -269,6 +271,8 @@ const function takeFlags(words: { string }): ({ string }, Flags)
 			flags.yes = true
 		elseif word == "--agree" then
 			flags.agree = true
+		elseif word == "--remember" then
+			flags.remember = true
 		elseif word == "--to" then
 			flags.to = words[i + 1]
 			if not flags.to then
@@ -466,11 +470,16 @@ end
 
 -- 로그인할 때마다 보여주는 주의 사항
 const LOGIN_WARNINGS = {
-	"경고: 토큰은 이 컴퓨터의 Studio 설정에만 저장되고 플레이스(Config 등)에는 들어가지 않음",
+	"경고: 토큰은 기본적으로 Studio 를 끌 때까지만 기억하고, 플레이스(Config 등)에는 절대 안 들어감",
+	"경고: --remember 를 붙이면 이 컴퓨터의 Studio 설정에 저장해서 다음에도 로그인 유지. 대신 다른 로컬 플러그인이 읽을 수 있음",
 	"경고: 공용 PC 라면 다 쓴 뒤 logout 해주세요",
 	"경고: login <토큰> 은 권한(scope) 없이 만든 토큰을 쓰는 걸 추천",
 	"경고: Wally 업로드(publish --yes)는 되돌릴 수 없음 (같은 버전 재업로드, 삭제 불가)",
 }
+
+const function rememberText(flags: Flags): string
+	return if flags.remember then "이 컴퓨터에 저장됨" else "Studio 를 끄면 로그아웃"
+end
 
 -- 로그인할 때마다 주의 사항을 보여주고, --agree 로 동의해야 진행
 function Commands.login(token: string?, flags: Flags, context: Context)
@@ -483,17 +492,17 @@ function Commands.login(token: string?, flags: Flags, context: Context)
 		return
 	end
 	if token then
-		Auth.setToken(token, "token")
+		Auth.setToken(token, "token", flags.remember)
 		const ok, user = pcall(Auth.whoami)
 		if not ok then
 			Auth.clear()
 			error(`토큰이 맞지 않음: {user}`, 0)
 		end
-		context.log(`완료: {user} 로 로그인 (토큰, GitHub 요청 한도만 늘어남)`)
+		context.log(`완료: {user} 로 로그인 (토큰, GitHub 요청 한도만 늘어남, {rememberText(flags)})`)
 		return
 	end
-	Auth.deviceLogin(context.log)
-	context.log(`완료: {Auth.whoami()} 로 로그인 (기기 로그인)`)
+	Auth.deviceLogin(context.log, flags.remember)
+	context.log(`완료: {Auth.whoami()} 로 로그인 (기기 로그인, {rememberText(flags)})`)
 end
 
 function Commands.publish(spec: string?, flags: Flags, context: Context)
@@ -579,7 +588,9 @@ function Commands.run(line: string, context: Context)
 		Auth.clear()
 		context.log("완료: 로그아웃 (저장된 토큰 삭제)")
 	elseif command == "whoami" then
-		context.log(`로그인: {Auth.whoami()} ({if Auth.kind() == "device" then "기기 로그인" else "토큰"})`)
+		context.log(
+			`로그인: {Auth.whoami()} ({if Auth.kind() == "device" then "기기 로그인" else "토큰"}, {if Auth.isRemembered() then "이 컴퓨터에 저장됨" else "Studio 를 끄면 로그아웃"})`
+		)
 	elseif command == "publish" then
 		Commands.publish(args[1], flags, context)
 	elseif command == "privacy" then
