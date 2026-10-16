@@ -1,12 +1,16 @@
--- DockWidget UI: 입력창 하나 + 버튼 + 로그
+-- DockWidget UI: 입력창(엔터로 명령 실행) + 버튼 + 로그
 
 const Selection = game:GetService("Selection")
 
+const Commands = require(script.Parent.Commands)
 const Config = require(script.Parent.Config)
 const Installer = require(script.Parent.Installer)
-const Linker = require(script.Parent.Linker)
+const Log = require(script.Parent.Log)
 
 const Ui = {}
+
+const MAX_LOG_LINES = 80
+const MAX_HISTORY = 50
 
 const function themeColor(color: Enum.StudioStyleGuideColor): Color3
 	return settings().Studio.Theme:GetColor(color)
@@ -23,18 +27,7 @@ const function make(className: string, props: { [string]: any }, children: { Ins
 	return instance
 end
 
-const function trim(text: string): string
-	return (string.gsub(text, "^%s*(.-)%s*$", "%1"))
-end
-
--- "sleitnick/signal@^2 as Sig" -> ("sleitnick/signal@^2", "Sig")
-const function parseSpec(text: string): (string, string?)
-	const spec, alias = string.match(trim(text), "^(.-)%s+as%s+(%S+)$")
-	if spec then
-		return spec, alias
-	end
-	return trim(text), nil
-end
+const NO_FLAGS: Commands.Flags = { server = false, selected = false, to = nil }
 
 function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	const root = make("ScrollingFrame", {
@@ -52,12 +45,12 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			PaddingLeft = UDim.new(0, 8),
 			PaddingRight = UDim.new(0, 8),
 		}),
-	})
+	}) :: ScrollingFrame
 
 	const input = make("TextBox", {
 		LayoutOrder = 1,
 		Size = UDim2.new(1, 0, 0, 28),
-		PlaceholderText = "sleitnick/signal@^2 as Signal  |  gh:owner/repo@^1  |  path",
+		PlaceholderText = "asdf = ro-bura/signal  (Enter 로 실행, help)",
 		Text = "",
 		ClearTextOnFocus = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -103,13 +96,22 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 
 	const logLines: { string } = {}
 	const function log(message: string)
-		print(`[PackageLoader] {message}`)
-		table.insert(logLines, message)
-		while #logLines > 60 do
+		for _, line in string.split(message, "\n") do
+			table.insert(logLines, line)
+		end
+		while #logLines > MAX_LOG_LINES do
 			table.remove(logLines, 1)
 		end
 		logLabel.Text = table.concat(logLines, "\n")
+		root.CanvasPosition = Vector2.new(0, math.huge)
 	end
+	const function clear()
+		table.clear(logLines)
+		logLabel.Text = ""
+	end
+	Log.setSink(log)
+
+	const context: Commands.Context = { plugin = plugin, log = log, clear = clear }
 
 	-- 작업은 하나씩만, 오류는 로그로
 	local busy = false
@@ -126,6 +128,50 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		busy = false
 	end
 
+	-- 입력 기록 (↑ / ↓)
+	const history: { string } = {}
+	local historyIndex = 0
+
+	input.FocusLost:Connect(function(enterPressed)
+		if not enterPressed then
+			return
+		end
+		const line = input.Text
+		if string.match(line, "^%s*$") then
+			return
+		end
+		if history[#history] ~= line then
+			table.insert(history, line)
+			if #history > MAX_HISTORY then
+				table.remove(history, 1)
+			end
+		end
+		historyIndex = #history + 1
+		input.Text = ""
+		log(`> {line}`)
+		task.spawn(run, function()
+			Commands.run(line, context)
+		end)
+		task.defer(function()
+			input:CaptureFocus()
+		end)
+	end)
+
+	input.InputBegan:Connect(function(inputObject)
+		if inputObject.UserInputType ~= Enum.UserInputType.Keyboard or #history == 0 then
+			return
+		end
+		if inputObject.KeyCode == Enum.KeyCode.Up then
+			historyIndex = math.max(1, historyIndex - 1)
+		elseif inputObject.KeyCode == Enum.KeyCode.Down then
+			historyIndex = math.min(#history + 1, historyIndex + 1)
+		else
+			return
+		end
+		input.Text = history[historyIndex] or ""
+		input.CursorPosition = #input.Text + 1
+	end)
+
 	local order = 0
 	const function addButton(text: string, job: () -> ())
 		order += 1
@@ -141,97 +187,51 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			Parent = buttonGrid,
 		}) :: TextButton
 		button.Activated:Connect(function()
+			log(`> [{text}]`)
 			task.spawn(run, job)
 		end)
 	end
 
-	const function selected(): Instance?
-		return Selection:Get()[1]
-	end
-
-	const function requireSpec(): (string, string?)
-		const spec, alias = parseSpec(input.Text)
-		if spec == "" then
-			error("패키지를 입력해주세요 (예: sleitnick/signal@^2)", 0)
-		end
-		return spec, alias
-	end
-
-	const function install(location: Instance)
-		const spec, alias = requireSpec()
-		Installer.install(spec, { alias = alias, location = location, log = log })
-	end
-
 	addButton("Add", function()
-		install(Installer.sharedRoot())
+		Commands.add(input.Text, NO_FLAGS, context)
 	end)
-
 	addButton("Add to Server", function()
-		install(Installer.serverRoot())
+		Commands.add(input.Text, { server = true, selected = false, to = nil }, context)
 	end)
-
 	addButton("Add to Selected", function()
-		const target = selected()
-		if not target then
-			error("Explorer 에서 설치할 폴더를 선택해주세요", 0)
-		end
-		install(target)
+		Commands.add(input.Text, { server = false, selected = true, to = nil }, context)
 	end)
-
 	addButton("Remove", function()
-		const alias = trim(input.Text)
-		if alias ~= "" then
-			Installer.remove(alias, nil, log)
-			return
-		end
-		const target = selected()
-		if target and target:GetAttribute(Linker.LINK_ATTRIBUTE) and target.Parent then
-			Installer.remove(target.Name, target.Parent, log)
-		else
-			error("지울 별칭을 입력하거나 Explorer 에서 패키지를 선택해주세요", 0)
-		end
+		Commands.remove(input.Text, context)
 	end)
-
 	addButton("Install All", function()
 		Installer.installAll(log)
 	end)
-
 	addButton("Prune", function()
 		Installer.prune(log)
 		log("정리 완료")
 	end)
-
 	addButton("Import File", function()
-		Installer.importFiles({ location = selected(), log = log })
+		Commands.import(NO_FLAGS, context, true)
 	end)
-
-	const function readPath(): string
-		const target = selected()
-		if target then
-			return Config.pathOf(target)
-		end
-		const text = trim(input.Text)
-		if text == "" then
-			error("Explorer 에서 폴더를 선택하거나 경로를 입력해주세요", 0)
-		end
-		Config.resolvePath(text, true)
-		return text
-	end
-
-	addButton("Set Shared Path", function()
-		const path = readPath()
-		Config.setSharedPath(path)
-		log(`shared 경로: {path}`)
-	end)
-
-	addButton("Set Server Path", function()
-		const path = readPath()
-		Config.setServerPath(path)
-		log(`server 경로: {path}`)
-	end)
-
 	addButton("Open Config", function()
-		plugin:OpenScript(Config.getModule())
+		Commands.openConfig(context)
+	end)
+	-- Explorer 에서 선택한 폴더 우선, 없으면 입력한 경로
+	const function pathInput(): string?
+		return if Selection:Get()[1] then nil else input.Text
+	end
+	addButton("Set Shared Path", function()
+		Commands.setPath("shared", pathInput(), context)
+	end)
+	addButton("Set Server Path", function()
+		Commands.setPath("server", pathInput(), context)
+	end)
+	addButton("List", function()
+		Commands.list(context)
+	end)
+	addButton("Help", function()
+		Commands.help(context)
 	end)
 
 	root.Parent = widget
@@ -240,6 +240,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	if ok then
 		log(`shared: {data.shared}`)
 		log(`server: {data.server}`)
+		log("help 를 입력하면 명령어 목록이 나옴")
 	else
 		log(`오류: {data}`)
 	end

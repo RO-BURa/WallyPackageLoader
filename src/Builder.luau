@@ -3,6 +3,7 @@
 
 const HttpService = game:GetService("HttpService")
 
+const Log = require(script.Parent.Log)
 const Vfs = require(script.Parent.Util.Vfs)
 const Toml = require(script.Parent.Util.Toml)
 
@@ -95,14 +96,14 @@ const function buildFile(vfs: Vfs, path: string, fileName: string): Instance?
 	if string.sub(fileName, -5) == ".json" then
 		const ok, decoded = pcall(HttpService.JSONDecode, HttpService, content)
 		if not ok then
-			warn(`[PackageLoader] JSON 을 읽을 수 없어 건너뜀: {path}`)
+			Log.warn(`JSON 을 읽을 수 없어 건너뜀: {path}`)
 			return nil
 		end
 		return newScript("ModuleScript", string.sub(fileName, 1, -6), "return " .. toLuau(decoded, "") .. "\n")
 	elseif string.sub(fileName, -5) == ".toml" then
 		const ok, decoded = pcall(Toml.decode, content)
 		if not ok then
-			warn(`[PackageLoader] TOML 을 읽을 수 없어 건너뜀: {path}`)
+			Log.warn(`TOML 을 읽을 수 없어 건너뜀: {path}`)
 			return nil
 		end
 		return newScript("ModuleScript", string.sub(fileName, 1, -6), "return " .. toLuau(decoded, "") .. "\n")
@@ -206,7 +207,7 @@ const function buildProjectNode(vfs: Vfs, baseDir: string, node: { [string]: any
 	if type(node["$path"]) == "string" then
 		instance = Builder.buildPath(vfs, resolveRelative(baseDir, node["$path"]), name, true)
 		if not instance then
-			warn(`[PackageLoader] 프로젝트 경로를 찾을 수 없음: {node["$path"]}`)
+			Log.warn(`프로젝트 경로를 찾을 수 없음: {node["$path"]}`)
 		end
 	end
 
@@ -214,7 +215,7 @@ const function buildProjectNode(vfs: Vfs, baseDir: string, node: { [string]: any
 		const className = if type(node["$className"]) == "string" then node["$className"] else "Folder"
 		const ok, created = pcall(Instance.new, className)
 		if not ok then
-			warn(`[PackageLoader] 만들 수 없는 클래스: {className}`)
+			Log.warn(`만들 수 없는 클래스: {className}`)
 			return nil
 		end
 		instance = created
@@ -238,7 +239,7 @@ end
 buildProjectFile = function(vfs: Vfs, path: string): Instance?
 	const ok, project = pcall(HttpService.JSONDecode, HttpService, vfs:read(path) :: string)
 	if not ok or type(project) ~= "table" or type(project.tree) ~= "table" then
-		warn(`[PackageLoader] 잘못된 프로젝트 파일: {path}`)
+		Log.warn(`잘못된 프로젝트 파일: {path}`)
 		return nil
 	end
 	const baseDir = string.match(path, "^(.*)/[^/]+$") or ""

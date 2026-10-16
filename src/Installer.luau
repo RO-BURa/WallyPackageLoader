@@ -3,6 +3,7 @@
 const Builder = require(script.Parent.Builder)
 const Config = require(script.Parent.Config)
 const Linker = require(script.Parent.Linker)
+const Log = require(script.Parent.Log)
 const Types = require(script.Parent.Sources.Types)
 const Wally = require(script.Parent.Sources.Wally)
 const GitHub = require(script.Parent.Sources.GitHub)
@@ -125,7 +126,7 @@ const function newContext(log: ((string) -> ())?): Context
 	return {
 		sharedRoot = Config.resolvePath(data.shared, true) :: Instance,
 		serverRoot = Config.resolvePath(data.server, true) :: Instance,
-		log = log or print,
+		log = log or Log.write,
 		created = {},
 		resolving = {},
 	}
@@ -173,7 +174,7 @@ end
 
 -- Config 에 적힌 의존성 전체 설치 (wally install 과 비슷)
 function Installer.installAll(log: ((string) -> ())?)
-	const logger = log or print
+	const logger = log or Log.write
 	const entries = Config.entries()
 	if #entries == 0 then
 		logger("Config 에 적힌 패키지가 없음")
@@ -243,13 +244,11 @@ function Installer.importFiles(options: InstallOptions)
 end
 
 -- thunk 를 지우고 Config 에서도 뺀 뒤 쓰이지 않는 엔트리 정리
--- base 가 없으면 Config 에서 별칭으로 찾음
-function Installer.remove(alias: string, base: Instance?, log: ((string) -> ())?)
-	const logger = log or print
-	local location: string
-	if base then
-		location = Config.pathOf(base)
-	else
+-- location(경로) 이 없으면 Config 에서 별칭으로 찾음
+function Installer.remove(alias: string, location: string?, log: ((string) -> ())?)
+	const logger = log or Log.write
+	local resolved = location
+	if not resolved then
 		const matches = {}
 		for _, entry in Config.entries() do
 			if entry.alias == alias then
@@ -261,22 +260,23 @@ function Installer.remove(alias: string, base: Instance?, log: ((string) -> ())?
 		elseif #matches > 1 then
 			error(`'{alias}' 가 여러 곳에 있음 ({table.concat(matches, ", ")}). Explorer 에서 지울 것을 선택하고 Remove 를 눌러주세요`, 0)
 		end
-		location = matches[1]
+		resolved = matches[1]
 	end
+	const path = resolved :: string
 
-	const folder = Config.resolvePath(location, false)
+	const folder = Config.resolvePath(path, false)
 	const thunk = folder and folder:FindFirstChild(alias)
 	if thunk and thunk:GetAttribute(Linker.LINK_ATTRIBUTE) then
 		thunk:Destroy()
 	end
-	Config.removeDependency(alias, location)
+	Config.removeDependency(alias, path)
 	Installer.prune(logger)
-	logger(`삭제됨: {alias} ({location})`)
+	logger(`삭제됨: {alias} ({path})`)
 end
 
 -- 어디서도 쓰이지 않는 _Index 엔트리 삭제
 function Installer.prune(log: ((string) -> ())?)
-	const logger = log or print
+	const logger = log or Log.write
 	for _, name in Linker.prune() do
 		logger(`정리됨: {name}`)
 	end

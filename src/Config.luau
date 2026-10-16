@@ -5,6 +5,7 @@
 const ServerStorage = game:GetService("ServerStorage")
 
 const ConfigEditor = require(script.Parent.Util.ConfigEditor)
+const Log = require(script.Parent.Log)
 
 export type Data = {
 	shared: string,
@@ -226,7 +227,7 @@ const function edit(apply: (source: string) -> string, mutate: (data: Data) -> (
 		end
 		module.Source = original
 	end
-	warn(`[PackageLoader] {CONFIG_NAME} 구조를 알아볼 수 없어 파일 전체를 다시 씀 ({if ok then "읽기 실패" else result})`)
+	Log.warn(`{CONFIG_NAME} 구조를 알아볼 수 없어 파일 전체를 다시 씀 ({if ok then "읽기 실패" else result})`)
 	const data = Config.read()
 	mutate(data)
 	Config.write(data)
