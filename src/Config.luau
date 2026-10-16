@@ -4,6 +4,8 @@
 
 const ServerStorage = game:GetService("ServerStorage")
 
+const ConfigEditor = require(script.Parent.Util.ConfigEditor)
+
 export type Data = {
 	shared: string,
 	server: string,
@@ -45,8 +47,9 @@ const DOCS = [==[
 		"gh:owner/repo"             GitHub, latest semver tag or default branch
 
 	After editing this file by hand, press "Install All" in the plugin.
-	Note: the plugin rewrites this file when you Add / Remove packages,
-	so comments (including this one) are removed at that time.
+	Add / Remove only edit the lines they need, so your comments are kept.
+	If the file can no longer be understood (e.g. the table is built with code),
+	the plugin rewrites the whole file and comments are lost.
 ]]
 ]==]
 
@@ -210,6 +213,25 @@ function Config.write(data: Data)
 	module.Source = serialize(data, false)
 end
 
+-- 소스에서 바뀌는 부분만 고침 (주석, 순서 유지)
+-- 구조를 알아볼 수 없거나 고친 결과를 읽을 수 없으면 파일 전체를 다시 씀
+const function edit(apply: (source: string) -> string, mutate: (data: Data) -> ())
+	const module: any = Config.getModule()
+	const original = module.Source
+	const ok, result = pcall(apply, original)
+	if ok then
+		module.Source = result
+		if pcall(Config.read) then
+			return
+		end
+		module.Source = original
+	end
+	warn(`[PackageLoader] {CONFIG_NAME} 구조를 알아볼 수 없어 파일 전체를 다시 씀 ({if ok then "읽기 실패" else result})`)
+	const data = Config.read()
+	mutate(data)
+	Config.write(data)
+end
+
 function Config.getSharedPath(): string
 	return Config.read().shared
 end
@@ -219,47 +241,73 @@ function Config.getServerPath(): string
 end
 
 function Config.setSharedPath(path: string)
-	const data = Config.read()
-	data.shared = path
-	Config.write(data)
+	edit(function(source)
+		return ConfigEditor.set(source, {}, "shared", string.format("%q", path))
+	end, function(data)
+		data.shared = path
+	end)
 end
 
 function Config.setServerPath(path: string)
-	const data = Config.read()
-	data.server = path
-	Config.write(data)
+	edit(function(source)
+		return ConfigEditor.set(source, {}, "server", string.format("%q", path))
+	end, function(data)
+		data.server = path
+	end)
 end
 
--- 설치 위치(path)에 맞는 목록
-const function mapFor(data: Data, path: string, create: boolean): { [string]: string }?
-	if path == data.shared then
-		return data.dependencies
-	elseif path == data.server then
-		return data.serverDependencies
+-- 설치 위치(path)에 맞는 Config 안의 테이블 경로
+const function sectionFor(data: Data, location: string): { string }
+	if location == data.shared then
+		return { "dependencies" }
+	elseif location == data.server then
+		return { "serverDependencies" }
 	end
-	if create and not data.custom[path] then
-		data.custom[path] = {}
+	return { "custom", location }
+end
+
+const function mapFor(data: Data, section: { string }, create: boolean): { [string]: string }?
+	if section[1] == "custom" then
+		if create and not data.custom[section[2]] then
+			data.custom[section[2]] = {}
+		end
+		return data.custom[section[2]]
 	end
-	return data.custom[path]
+	return (data :: any)[section[1]]
 end
 
 function Config.addDependency(alias: string, spec: string, location: string)
-	const data = Config.read()
-	const map = mapFor(data, location, true) :: { [string]: string }
-	map[alias] = spec
-	Config.write(data)
+	const section = sectionFor(Config.read(), location)
+	edit(function(source)
+		return ConfigEditor.set(source, section, alias, string.format("%q", spec))
+	end, function(data)
+		(mapFor(data, section, true) :: { [string]: string })[alias] = spec
+	end)
 end
 
 function Config.removeDependency(alias: string, location: string)
 	const data = Config.read()
-	const map = mapFor(data, location, false)
-	if map and map[alias] then
-		map[alias] = nil
-		if data.custom[location] and next(data.custom[location]) == nil then
-			data.custom[location] = nil
-		end
-		Config.write(data)
+	const section = sectionFor(data, location)
+	const map = mapFor(data, section, false)
+	if not map or not map[alias] then
+		return
 	end
+	edit(function(source)
+		local result = ConfigEditor.remove(source, section, alias)
+		-- custom 안의 빈 경로 테이블은 지움
+		if section[1] == "custom" and ConfigEditor.isEmpty(result, section) then
+			result = ConfigEditor.remove(result, { "custom" }, section[2])
+		end
+		return result
+	end, function(fallback)
+		const fallbackMap = mapFor(fallback, section, false)
+		if fallbackMap then
+			fallbackMap[alias] = nil
+		end
+		if section[1] == "custom" and fallback.custom[section[2]] and next(fallback.custom[section[2]]) == nil then
+			fallback.custom[section[2]] = nil
+		end
+	end)
 end
 
 -- 모든 의존성 (설치 위치 경로 포함)

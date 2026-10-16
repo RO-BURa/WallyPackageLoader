@@ -49,7 +49,8 @@ return {
 }
 ```
 처음 만들 때 맨 아래에 쓸 수 있는 항목 설명이 주석으로 들어갑니다.
-Add / Remove 를 하면 플러그인이 파일을 다시 쓰기 때문에 그때 주석은 사라집니다.
+Add / Remove / 경로 설정은 필요한 줄만 고치기 때문에 직접 단 주석과 순서가 그대로 남습니다.
+테이블을 코드로 만드는 등 구조를 알아볼 수 없을 때만 파일 전체를 다시 씁니다 (이때는 주석이 사라짐).
 
 ## 설치 구조
 ```
@@ -84,7 +85,7 @@ rojo build --plugin WallyPackageLoader.rbxm
 | `src/Config.luau` | `PackageLoaderConfig` ModuleScript 읽기/쓰기 |
 | `src/Http.luau` | HttpService 래퍼 |
 | `src/Sources/` | Wally, GitHub, File, manifest(wally.toml / pesde.toml) |
-| `src/Util/` | Inflate(deflate/gzip), Zip, Semver, Toml, TypeExports, Vfs |
+| `src/Util/` | Inflate(deflate/gzip), Zip, Semver, Toml, Lexer, TypeExports, ConfigEditor, Vfs |
 
 ## 아직 안 되는 것
 - pesde 레지스트리 패키지 (`name = "scope/name"` 형식 의존성), GitHub 외 Git 저장소
