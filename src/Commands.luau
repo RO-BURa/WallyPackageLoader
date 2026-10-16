@@ -447,7 +447,18 @@ function Commands.openConfig(context: Context)
 	context.plugin:OpenScript(Config.getModule())
 end
 
+-- 로그인할 때마다 보여주는 주의 사항
+const LOGIN_WARNINGS = {
+	"경고: 토큰은 이 컴퓨터의 Studio 설정에만 저장되고 플레이스(Config 등)에는 들어가지 않음",
+	"경고: 공용 PC 라면 다 쓴 뒤 logout 해주세요",
+	"경고: login <토큰> 은 권한(scope) 없이 만든 토큰을 쓰는 걸 추천",
+	"경고: Wally 업로드(publish --yes)는 되돌릴 수 없음 (같은 버전 재업로드, 삭제 불가)",
+}
+
 function Commands.login(token: string?, context: Context)
+	for _, warning in LOGIN_WARNINGS do
+		context.log(warning)
+	end
 	if token then
 		Auth.setToken(token, "token")
 		const ok, user = pcall(Auth.whoami)
