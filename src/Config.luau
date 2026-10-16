@@ -5,6 +5,7 @@
 const ServerStorage = game:GetService("ServerStorage")
 
 const ConfigEditor = require(script.Parent.Util.ConfigEditor)
+const LicenseText = require(script.Parent.LicenseText)
 
 export type Data = {
 	shared: string,
@@ -163,6 +164,13 @@ function Config.getModule(): ModuleScript
 	const module = Instance.new("ModuleScript")
 	module.Name = CONFIG_NAME
 	;(module :: any).Source = serialize(data, true)
+
+	-- 처음 만들 때만 라이선스 고지를 같이 넣음 (지워도 다시 만들지 않음)
+	const licenseModule = Instance.new("ModuleScript")
+	licenseModule.Name = "LICENSE"
+	;(licenseModule :: any).Source = `-- WallyPackageLoader license and third-party notices. You can delete this.\nreturn [==[\n{LicenseText.text()}\n]==]\n`
+	licenseModule.Parent = module
+
 	module.Parent = ServerStorage
 	return module
 end
