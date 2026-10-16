@@ -3,6 +3,7 @@
 const Selection = game:GetService("Selection")
 const TextService = game:GetService("TextService")
 
+const Auth = require(script.Parent.Auth)
 const Commands = require(script.Parent.Commands)
 const Config = require(script.Parent.Config)
 const Fmt = require(script.Parent.Fmt)
@@ -211,6 +212,15 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 
 	-- 작업은 하나씩만, 오류는 로그로
 	local busy = false
+	-- 로그인했을 때만 보이는 버튼 (Logout, Publish)
+	const loginOnlyButtons: { TextButton } = {}
+	const function refreshLoginButtons()
+		const loggedIn = Auth.getToken() ~= nil
+		for _, button in loginOnlyButtons do
+			button.Visible = loggedIn
+		end
+	end
+
 	const function run(job: () -> ())
 		if busy then
 			log("이전 작업이 끝날 때까지 기다려주세요")
@@ -222,6 +232,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			log(`오류: {err}`)
 		end
 		busy = false
+		refreshLoginButtons()
 	end
 
 	-- 입력 기록 (↑ / ↓)
@@ -262,6 +273,11 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		end)
 		task.defer(function()
 			input:CaptureFocus()
+			-- 다시 포커스를 잡을 때 Enter 가 공백으로 들어가는 경우가 있어서 한 프레임 뒤 비움
+			task.wait()
+			if string.match(input.Text, "^%s*$") then
+				input.Text = ""
+			end
 		end)
 	end)
 
@@ -281,7 +297,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	end)
 
 	local order = 0
-	const function addButton(text: string, job: () -> ())
+	const function addButton(text: string, job: () -> ()): TextButton
 		order += 1
 		const button = make("TextButton", {
 			LayoutOrder = order,
@@ -298,6 +314,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			logCommand(`[{text}]`)
 			task.spawn(run, job)
 		end)
+		return button
 	end
 
 	addButton("Add", function()
@@ -342,6 +359,15 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	addButton("Help", function()
 		Commands.help(context)
 	end)
+
+	-- 로그인하면 보임. Publish 는 입력창 내용을 그대로 publish 에 넘김 (--yes 가 없으면 미리보기만)
+	table.insert(loginOnlyButtons, addButton("Logout", function()
+		Commands.run("logout", context)
+	end))
+	table.insert(loginOnlyButtons, addButton("Publish", function()
+		Commands.run("publish " .. string.gsub(input.Text, "^%s*[pP][uU][bB][lL][iI][sS][hH]%s+", ""), context)
+	end))
+	refreshLoginButtons()
 
 	root.Parent = widget
 
