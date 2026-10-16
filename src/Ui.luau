@@ -145,25 +145,31 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		return (background.R + background.G + background.B) / 3 < 0.5
 	end
 
-	const function render()
-		const markup = table.concat(logLines, "\n")
-		const plain = Fmt.strip(markup)
-
-		const width = math.max(1, logFrame.AbsoluteWindowSize.X - LOG_PADDING_X * 2)
-		const textHeight = if #logLines == 0
-			then 0
-			else TextService:GetTextSize(plain, LOG_TEXT_SIZE, LOG_FONT, Vector2.new(width, 1e6)).Y
-
+	-- 높이: TextService 로 먼저 어림잡고, 실제로 그려진 TextBounds 가 더 크면 그걸 씀
+	-- (RichText 굵은 글씨, 한글 대체 폰트는 GetTextSize 에 반영이 안 됨)
+	local estimatedHeight = 0
+	const function applyHeight()
+		const textHeight = if #logLines == 0 then 0 else math.max(estimatedHeight, logLabel.TextBounds.Y)
 		const wasFollowing = followBottom
-		logLabel.Text = Fmt.resolve(markup, isDarkTheme())
-		logLabel.Size = UDim2.new(1, -LOG_PADDING_X * 2, 0, textHeight)
-		canvasHeight = textHeight + LOG_PADDING_Y * 2
+		logLabel.Size = UDim2.new(1, -LOG_PADDING_X * 2, 0, textHeight + LOG_TEXT_SIZE)
+		canvasHeight = textHeight + LOG_TEXT_SIZE + LOG_PADDING_Y * 2
 		logFrame.CanvasSize = UDim2.fromOffset(0, canvasHeight)
 		if wasFollowing then
 			logFrame.CanvasPosition = Vector2.new(0, bottomY())
 			followBottom = true
 		end
 	end
+
+	const function render()
+		const markup = table.concat(logLines, "\n")
+		const width = math.max(1, logFrame.AbsoluteWindowSize.X - LOG_PADDING_X * 2)
+		estimatedHeight = if #logLines == 0
+			then 0
+			else TextService:GetTextSize(Fmt.strip(markup), LOG_TEXT_SIZE, LOG_FONT, Vector2.new(width, 1e6)).Y
+		logLabel.Text = Fmt.resolve(markup, isDarkTheme())
+		applyHeight()
+	end
+	logLabel:GetPropertyChangedSignal("TextBounds"):Connect(applyHeight)
 	logFrame:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(render)
 
 	const function rich(markup: string)
@@ -185,7 +191,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	end
 	-- 입력한 명령은 앞에 파란 원
 	const function logCommand(line: string)
-		rich(Fmt.color("blue", "●") .. " " .. Fmt.bold(Fmt.escape(line)))
+		rich(Fmt.color("blue", "●") .. " " .. Fmt.escape(line))
 	end
 	const function clear()
 		table.clear(logLines)
@@ -347,6 +353,8 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 				busy = busy,
 				followBottom = followBottom,
 				canvasHeight = canvasHeight,
+				estimatedHeight = estimatedHeight,
+				textBounds = logLabel.TextBounds,
 				canvas = logFrame.AbsoluteCanvasSize,
 				window = logFrame.AbsoluteWindowSize,
 				position = logFrame.CanvasPosition,
