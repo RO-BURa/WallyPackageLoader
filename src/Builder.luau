@@ -2,8 +2,10 @@
 -- 참고: roblox-package-manager 의 FileConverter (MIT), Rojo 동기화 규칙
 
 const HttpService = game:GetService("HttpService")
+const SerializationService = game:GetService("SerializationService")
 
 const Log = require(script.Parent.Log)
+const RojoValues = require(script.Parent.Util.RojoValues)
 const Vfs = require(script.Parent.Util.Vfs)
 const Toml = require(script.Parent.Util.Toml)
 
@@ -82,6 +84,77 @@ const function shouldSkip(fileName: string): boolean
 		or string.sub(fileName, -13) == ".project.json"
 end
 
+const function decodeJson(content: string, path: string): any?
+	const ok, decoded = pcall(HttpService.JSONDecode, HttpService, content)
+	if not ok or type(decoded) ~= "table" then
+		Log.warn(`JSON 을 읽을 수 없어 건너뜀: {path}`)
+		return nil
+	end
+	return decoded
+end
+
+-- properties / attributes 적용하고 실패한 것은 경고
+const function applyValues(instance: Instance, properties: any, attributes: any, path: string)
+	const failed = RojoValues.apply(instance, properties, attributes)
+	for _, item in failed do
+		Log.warn(`{path}: 속성을 적용할 수 없음 {item}`)
+	end
+end
+
+-- .meta.json 적용 (properties, attributes)
+const function applyMeta(vfs: Vfs, instance: Instance, metaPath: string)
+	const content = vfs:read(metaPath)
+	if not content then
+		return
+	end
+	const meta = decodeJson(content, metaPath)
+	if meta then
+		applyValues(instance, meta.properties, meta.attributes, metaPath)
+	end
+end
+
+-- .model.json (Rojo JSON 모델). 대문자/소문자 키 둘 다 받음
+const function buildModel(node: any, name: string, path: string): Instance?
+	const className = node.ClassName or node.className or "Folder"
+	const ok, instance = pcall(Instance.new, className)
+	if not ok then
+		Log.warn(`{path}: 만들 수 없는 클래스 {className}`)
+		return nil
+	end
+	instance.Name = name
+	applyValues(instance, node.Properties or node.properties, node.Attributes or node.attributes, path)
+	for _, child in node.Children or node.children or {} do
+		const childName = child.Name or child.name or child.ClassName or child.className or "Instance"
+		const childInstance = buildModel(child, childName, path)
+		if childInstance then
+			childInstance.Parent = instance
+		end
+	end
+	return instance
+end
+
+-- .rbxm (SerializationService, 플러그인에서만 가능). 실패하면 건너뜀
+const function buildBinaryModel(content: string, name: string, path: string): Instance?
+	const ok, result = pcall(function()
+		return SerializationService:DeserializeInstancesAsync(buffer.fromstring(content))
+	end)
+	if not ok then
+		Log.warn(`모델 파일을 읽을 수 없어 건너뜀: {path} ({string.match(tostring(result), "^[^\n]*")})`)
+		return nil
+	end
+	if #result == 1 then
+		result[1].Name = name
+		return result[1]
+	end
+	-- 최상위가 여러 개면 폴더로 묶음
+	const folder = Instance.new("Folder")
+	folder.Name = name
+	for _, instance in result do
+		instance.Parent = folder
+	end
+	return folder
+end
+
 local buildDir: (vfs: Vfs, dir: string, name: string, ignoreProject: boolean?) -> Instance?
 local buildProjectFile: (vfs: Vfs, path: string) -> Instance?
 
@@ -93,7 +166,14 @@ const function buildFile(vfs: Vfs, path: string, fileName: string): Instance?
 		return newScript(className, scriptName :: string, content)
 	end
 
-	if string.sub(fileName, -5) == ".json" then
+	if string.sub(fileName, -11) == ".model.json" then
+		const node = decodeJson(content, path)
+		return if node then buildModel(node, string.sub(fileName, 1, -12), path) else nil
+	elseif string.sub(fileName, -5) == ".rbxm" then
+		return buildBinaryModel(content, string.sub(fileName, 1, -6), path)
+	elseif string.sub(fileName, -6) == ".rbxmx" then
+		return buildBinaryModel(content, string.sub(fileName, 1, -7), path)
+	elseif string.sub(fileName, -5) == ".json" then
 		const ok, decoded = pcall(HttpService.JSONDecode, HttpService, content)
 		if not ok then
 			Log.warn(`JSON 을 읽을 수 없어 건너뜀: {path}`)
@@ -114,7 +194,6 @@ const function buildFile(vfs: Vfs, path: string, fileName: string): Instance?
 		return value
 	end
 
-	-- .rbxm / .rbxmx / .model.json 등은 아직 지원하지 않음
 	return nil
 end
 
@@ -142,16 +221,38 @@ buildDir = function(vfs: Vfs, dir: string, name: string, ignoreProject: boolean?
 			break
 		end
 	end
+	-- init.meta.json: init 스크립트가 없으면 className 으로 폴더 대신 다른 클래스를 만듦
+	const initMetaPath = Vfs.join(dir, "init.meta.json")
 	if not container then
-		const folder = Instance.new("Folder")
-		folder.Name = name
-		container = folder
+		local className = "Folder"
+		const initMeta = vfs:read(initMetaPath)
+		if initMeta then
+			const meta = decodeJson(initMeta, initMetaPath)
+			if meta and type(meta.className) == "string" then
+				className = meta.className
+			end
+		end
+		local ok, created = pcall(Instance.new, className)
+		if not ok then
+			Log.warn(`{initMetaPath}: 만들 수 없는 클래스 {className}`)
+			created = Instance.new("Folder")
+		end
+		created.Name = name
+		container = created
 	end
+	applyMeta(vfs, container :: Instance, initMetaPath)
 
 	for _, fileName in fileNames do
 		if fileName ~= initFile and not shouldSkip(fileName) then
 			const child = buildFile(vfs, Vfs.join(dir, fileName), fileName)
 			if child then
+				-- Foo.server.luau -> Foo.server.meta.json, Foo.luau -> Foo.meta.json
+				const base = string.match(fileName, "^(.*)%.[^.]+$") or fileName
+				local metaPath = Vfs.join(dir, base .. ".meta.json")
+				if not vfs:isFile(metaPath) then
+					metaPath = Vfs.join(dir, child.Name .. ".meta.json")
+				end
+				applyMeta(vfs, child, metaPath)
 				child.Parent = container
 			end
 		end
@@ -223,6 +324,7 @@ const function buildProjectNode(vfs: Vfs, baseDir: string, node: { [string]: any
 
 	const result = instance :: Instance
 	result.Name = name
+	applyValues(result, node["$properties"], node["$attributes"], `project node {name}`)
 
 	for childName, childNode in node do
 		if string.sub(childName, 1, 1) ~= "$" and type(childNode) == "table" then

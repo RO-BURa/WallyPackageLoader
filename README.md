@@ -13,6 +13,8 @@ Wally 와 같은 `_Index` 구조로 설치합니다.
   - 일반 폴더는 Studio API 에 폴더 선택 기능이 없어서 zip 으로 압축해서 가져와야 함
 - **타입 re-export**: thunk 모듈이 패키지의 `export type` 을 다시 export 해서
   `Packages.Signal.Signal<T>` 같은 타입을 바로 사용 가능 (pesde 링커와 같은 방식, `const` 가 있는 소스도 처리)
+- **Rojo 파일 형식**: 패키지 안의 `.model.json`, `*.meta.json` / `init.meta.json` (properties, attributes, className, Tags),
+  project.json 의 `$properties` / `$attributes`, `.rbxm` (`SerializationService`, 읽을 수 없으면 건너뜀) 지원
 - **정리**: 어디서도 쓰이지 않는 `_Index` 엔트리 삭제 (이 플러그인이 만든 것만, Rojo 로 동기화한 Wally 패키지는 건드리지 않음)
 
 ## 사용법
@@ -112,11 +114,11 @@ rojo build --plugin WallyPackageLoader.rbxm
 | `src/Config.luau` | `PackageLoaderConfig` ModuleScript 읽기/쓰기 |
 | `src/Http.luau` | HttpService 래퍼 |
 | `src/Sources/` | Wally, GitHub, File, manifest(wally.toml / pesde.toml) |
-| `src/Util/` | Inflate(deflate/gzip), Zip, Semver, Toml, Lexer, TypeExports, ConfigEditor, Vfs |
+| `src/Util/` | Inflate(deflate/gzip), Zip, Semver, Toml, Lexer, TypeExports, ConfigEditor, RojoValues(Rojo 속성 값), Vfs |
 
 ## 아직 안 되는 것
 - pesde 레지스트리 패키지 (`name = "scope/name"` 형식 의존성), GitHub 외 Git 저장소
-- 받은 패키지(Wally / GitHub / zip) 안에 들어 있는 `.rbxm` / `.rbxmx` / `.model.json` 파일은 건너뜀, `*.meta.json` 의 속성은 적용 안 됨
+- `.rbxmx` (XML 모델) 는 `SerializationService` 가 읽을 수 있을 때만 됨
 - zip64, 암호화된 zip
 
 ## 참고한 레퍼런스
