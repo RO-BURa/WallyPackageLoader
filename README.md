@@ -9,15 +9,47 @@ Wally 와 같은 `_Index` 구조로 설치합니다.
 - **GitHub**: `gh:owner/repo@^1.0` (semver 태그), `gh:owner/repo#main` (브랜치/태그/커밋)
   - `wally.toml` 또는 `pesde.toml` 의 의존성도 같이 설치
   - pesde 는 중앙 레지스트리를 없애고 Git 태그 기반으로 바뀌는 중이라 ([RFC #59](https://github.com/pesde-pkg/pesde/issues/59)) GitHub 소스를 지원
-- **파일에서 가져오기**: `.lua` / `.luau` (ModuleScript 하나), `.zip` (wally.toml 이 있으면 패키지로, 없으면 폴더로)
+- **파일에서 가져오기**: `.lua` / `.luau` (여러 개 한 번에 선택 가능), `.zip` (wally.toml 이 있으면 패키지로, 없으면 폴더로)
+  - 일반 폴더는 Studio API 에 폴더 선택 기능이 없어서 zip 으로 압축해서 가져와야 함
 - **타입 re-export**: thunk 모듈이 패키지의 `export type` 을 다시 export 해서
   `Packages.Signal.Signal<T>` 같은 타입을 바로 사용 가능 (pesde 링커와 같은 방식, `const` 가 있는 소스도 처리)
-- **설정**: `ServerStorage.PackageLoaderConfig` 에 저장되어 Team Create 로 공유
-  - `SharedPackages` (기본 `ReplicatedStorage/Packages`)
-  - `ServerPackages` (기본 `ServerScriptService/ServerPackages`)
-  - `Dependencies` (설치한 패키지 목록, "Config 전체 설치" 로 다시 설치 가능)
-- 설치 위치는 Config 경로를 쓰거나, 직접 입력 / Explorer 에서 선택한 폴더로 지정 가능
 - **정리**: 어디서도 쓰이지 않는 `_Index` 엔트리 삭제 (이 플러그인이 만든 것만, Rojo 로 동기화한 Wally 패키지는 건드리지 않음)
+
+## 사용법
+입력창에 패키지나 경로를 적고 버튼을 누릅니다. 별칭은 `sleitnick/signal@^2 as Sig` 처럼 지정합니다.
+
+| 버튼 | 동작 |
+|---|---|
+| Add | `shared` 경로에 설치 |
+| Add to Server | `server` 경로에 설치 |
+| Add to Selected | Explorer 에서 선택한 폴더에 설치 |
+| Remove | 입력한 별칭 삭제, 입력이 비어 있으면 Explorer 에서 선택한 패키지 삭제 |
+| Install All | Config 에 적힌 패키지 전체 설치 (`wally install` 과 비슷) |
+| Prune | 안 쓰는 `_Index` 엔트리 정리 |
+| Import File | 파일 선택 창. Explorer 에서 선택한 곳, 없으면 `shared` 경로에 가져옴 |
+| Set Shared Path / Set Server Path | Explorer 에서 선택한 폴더(없으면 입력한 경로)로 설정 |
+| Open Config | Config 스크립트 열기 |
+
+## 설정 (ServerStorage.PackageLoaderConfig)
+직접 고칠 수 있는 ModuleScript 이고 Team Create 로 공유됩니다. 직접 고친 뒤에는 **Install All** 을 누릅니다.
+```luau
+return {
+	shared = "ReplicatedStorage/Packages",
+	server = "ServerScriptService/ServerPackages",
+
+	dependencies = {
+		Signal = "sleitnick/signal@^2",
+	},
+	serverDependencies = {},
+	custom = {
+		["ServerStorage/Libs"] = {
+			Myrepo = "gh:me/myrepo@^1",
+		},
+	},
+}
+```
+처음 만들 때 맨 아래에 쓸 수 있는 항목 설명이 주석으로 들어갑니다.
+Add / Remove 를 하면 플러그인이 파일을 다시 쓰기 때문에 그때 주석은 사라집니다.
 
 ## 설치 구조
 ```
@@ -49,7 +81,7 @@ rojo build --plugin WallyPackageLoader.rbxm
 | `src/Installer.luau` | 스펙 해석, 의존성 재귀 설치, Config 저장, 정리 |
 | `src/Linker.luau` | `_Index` 구조, thunk 생성, require 경로 계산 |
 | `src/Builder.luau` | 파일 -> Instance (Rojo 규칙, `default.project.json`) |
-| `src/Config.luau` | `PackageLoaderConfig` 읽기/쓰기 |
+| `src/Config.luau` | `PackageLoaderConfig` ModuleScript 읽기/쓰기 |
 | `src/Http.luau` | HttpService 래퍼 |
 | `src/Sources/` | Wally, GitHub, File, manifest(wally.toml / pesde.toml) |
 | `src/Util/` | Inflate(deflate/gzip), Zip, Semver, Toml, TypeExports, Vfs |

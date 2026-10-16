@@ -1,14 +1,15 @@
--- DockWidget UI (기본 Instance 로만 구성)
+-- DockWidget UI: 입력창 하나 + 버튼 + 로그
 
 const Selection = game:GetService("Selection")
 
 const Config = require(script.Parent.Config)
 const Installer = require(script.Parent.Installer)
+const Linker = require(script.Parent.Linker)
 
 const Ui = {}
 
-const function themeColor(color: Enum.StudioStyleGuideColor, modifier: Enum.StudioStyleGuideModifier?): Color3
-	return settings().Studio.Theme:GetColor(color, modifier)
+const function themeColor(color: Enum.StudioStyleGuideColor): Color3
+	return settings().Studio.Theme:GetColor(color)
 end
 
 const function make(className: string, props: { [string]: any }, children: { Instance }?): Instance
@@ -22,68 +23,20 @@ const function make(className: string, props: { [string]: any }, children: { Ins
 	return instance
 end
 
-const function textBox(placeholder: string, order: number): TextBox
-	return make("TextBox", {
-		LayoutOrder = order,
-		Size = UDim2.new(1, 0, 0, 26),
-		PlaceholderText = placeholder,
-		Text = "",
-		ClearTextOnFocus = false,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Font = Enum.Font.SourceSans,
-		TextSize = 15,
-		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.InputFieldBackground),
-		TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
-		PlaceholderColor3 = themeColor(Enum.StudioStyleGuideColor.DimmedText),
-		BorderColor3 = themeColor(Enum.StudioStyleGuideColor.InputFieldBorder),
-	}, {
-		make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
-	}) :: TextBox
+const function trim(text: string): string
+	return (string.gsub(text, "^%s*(.-)%s*$", "%1"))
 end
 
-const function button(text: string, order: number, width: UDim?): TextButton
-	return make("TextButton", {
-		LayoutOrder = order,
-		Size = UDim2.new(width or UDim.new(1, 0), UDim.new(0, 26)),
-		Text = text,
-		Font = Enum.Font.SourceSansSemibold,
-		TextSize = 15,
-		AutoButtonColor = true,
-		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.Button),
-		TextColor3 = themeColor(Enum.StudioStyleGuideColor.ButtonText),
-		BorderColor3 = themeColor(Enum.StudioStyleGuideColor.ButtonBorder),
-	}) :: TextButton
+-- "sleitnick/signal@^2 as Sig" -> ("sleitnick/signal@^2", "Sig")
+const function parseSpec(text: string): (string, string?)
+	const spec, alias = string.match(trim(text), "^(.-)%s+as%s+(%S+)$")
+	if spec then
+		return spec, alias
+	end
+	return trim(text), nil
 end
 
-const function label(text: string, order: number): TextLabel
-	return make("TextLabel", {
-		LayoutOrder = order,
-		Size = UDim2.new(1, 0, 0, 18),
-		BackgroundTransparency = 1,
-		Text = text,
-		Font = Enum.Font.SourceSansSemibold,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		TextColor3 = themeColor(Enum.StudioStyleGuideColor.DimmedText),
-	}) :: TextLabel
-end
-
-const function row(order: number, children: { Instance }): Frame
-	return make("Frame", {
-		LayoutOrder = order,
-		Size = UDim2.new(1, 0, 0, 26),
-		BackgroundTransparency = 1,
-	}, {
-		make("UIListLayout", {
-			FillDirection = Enum.FillDirection.Horizontal,
-			Padding = UDim.new(0, 4),
-			SortOrder = Enum.SortOrder.LayoutOrder,
-		}),
-		table.unpack(children),
-	}) :: Frame
-end
-
-function Ui.mount(widget: DockWidgetPluginGui)
+function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	const root = make("ScrollingFrame", {
 		Size = UDim2.fromScale(1, 1),
 		CanvasSize = UDim2.new(),
@@ -91,7 +44,6 @@ function Ui.mount(widget: DockWidgetPluginGui)
 		ScrollBarThickness = 6,
 		BorderSizePixel = 0,
 		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.MainBackground),
-		Parent = widget,
 	}, {
 		make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
 		make("UIPadding", {
@@ -102,54 +54,40 @@ function Ui.mount(widget: DockWidgetPluginGui)
 		}),
 	})
 
-	-- 설치 입력
-	label("패키지", 1).Parent = root
-	const specBox = textBox("sleitnick/signal@^2  /  gh:owner/repo@^1  /  gh:owner/repo#main", 2)
-	specBox.Parent = root
-	const aliasBox = textBox("별칭 (비우면 자동)", 3)
-	aliasBox.Parent = root
+	const input = make("TextBox", {
+		LayoutOrder = 1,
+		Size = UDim2.new(1, 0, 0, 28),
+		PlaceholderText = "sleitnick/signal@^2 as Signal  |  gh:owner/repo@^1  |  path",
+		Text = "",
+		ClearTextOnFocus = false,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Font = Enum.Font.Code,
+		TextSize = 14,
+		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.InputFieldBackground),
+		TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
+		PlaceholderColor3 = themeColor(Enum.StudioStyleGuideColor.DimmedText),
+		BorderColor3 = themeColor(Enum.StudioStyleGuideColor.InputFieldBorder),
+		Parent = root,
+	}, {
+		make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
+	}) :: TextBox
 
-	label("설치 위치 (비우면 Config 경로)", 4).Parent = root
-	const locationBox = textBox("예: ReplicatedStorage/Packages", 1)
-	locationBox.Size = UDim2.new(1, -94, 0, 26)
-	const pickButton = button("선택한 폴더", 2, UDim.new(0, 90))
-	row(5, { locationBox, pickButton }).Parent = root
-
-	local server = false
-	const serverButton = button("Realm: shared", 6)
-	serverButton.Parent = root
-
-	const installButton = button("설치", 1, UDim.new(0.5, -2))
-	const fileButton = button("파일에서 가져오기", 2, UDim.new(0.5, -2))
-	row(7, { installButton, fileButton }).Parent = root
-
-	const installAllButton = button("Config 전체 설치", 1, UDim.new(0.5, -2))
-	const pruneButton = button("안 쓰는 패키지 정리", 2, UDim.new(0.5, -2))
-	row(8, { installAllButton, pruneButton }).Parent = root
-
-	-- 설정
-	label("Config 경로 (ServerStorage.PackageLoaderConfig)", 9).Parent = root
-	const sharedBox = textBox("Shared 경로", 10)
-	sharedBox.Parent = root
-	const serverPathBox = textBox("Server 경로", 11)
-	serverPathBox.Parent = root
-
-	-- 설치된 의존성
-	label("의존성", 12).Parent = root
-	const listFrame = make("Frame", {
-		LayoutOrder = 13,
+	const buttonGrid = make("Frame", {
+		LayoutOrder = 2,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		Parent = root,
 	}, {
-		make("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
+		make("UIGridLayout", {
+			CellSize = UDim2.new(0.5, -3, 0, 26),
+			CellPadding = UDim2.fromOffset(6, 6),
+			SortOrder = Enum.SortOrder.LayoutOrder,
+		}),
 	})
 
-	-- 로그
-	label("로그", 14).Parent = root
 	const logLabel = make("TextLabel", {
-		LayoutOrder = 15,
+		LayoutOrder = 3,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
@@ -167,16 +105,14 @@ function Ui.mount(widget: DockWidgetPluginGui)
 	const function log(message: string)
 		print(`[PackageLoader] {message}`)
 		table.insert(logLines, message)
-		while #logLines > 40 do
+		while #logLines > 60 do
 			table.remove(logLines, 1)
 		end
 		logLabel.Text = table.concat(logLines, "\n")
 	end
 
-	local busy = false
-	local refreshList: () -> ()
-
 	-- 작업은 하나씩만, 오류는 로그로
+	local busy = false
 	const function run(job: () -> ())
 		if busy then
 			log("이전 작업이 끝날 때까지 기다려주세요")
@@ -188,132 +124,125 @@ function Ui.mount(widget: DockWidgetPluginGui)
 			log(`오류: {err}`)
 		end
 		busy = false
-		refreshList()
 	end
 
-	const function readLocation(): Instance?
-		const text = string.match(locationBox.Text, "^%s*(.-)%s*$") :: string
-		if text == "" then
-			return nil
-		end
-		const location = Config.resolvePath(text, true)
-		if not location then
-			error(`설치 위치를 찾을 수 없음: {text}`, 0)
-		end
-		return location
+	local order = 0
+	const function addButton(text: string, job: () -> ())
+		order += 1
+		const button = make("TextButton", {
+			LayoutOrder = order,
+			Text = text,
+			Font = Enum.Font.SourceSansSemibold,
+			TextSize = 15,
+			AutoButtonColor = true,
+			BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.Button),
+			TextColor3 = themeColor(Enum.StudioStyleGuideColor.ButtonText),
+			BorderColor3 = themeColor(Enum.StudioStyleGuideColor.ButtonBorder),
+			Parent = buttonGrid,
+		}) :: TextButton
+		button.Activated:Connect(function()
+			task.spawn(run, job)
+		end)
 	end
 
-	refreshList = function()
-		for _, child in listFrame:GetChildren() do
-			if child:IsA("Frame") then
-				child:Destroy()
-			end
-		end
-
-		const dependencies = Config.getDependencies()
-		const aliases = {}
-		for alias in dependencies do
-			table.insert(aliases, alias)
-		end
-		table.sort(aliases)
-
-		for i, alias in aliases do
-			const dependency = dependencies[alias]
-			const where = dependency.location or dependency.realm
-			const text = make("TextLabel", {
-				LayoutOrder = 1,
-				Size = UDim2.new(1, -64, 1, 0),
-				BackgroundTransparency = 1,
-				Text = `{alias} = {dependency.spec}  ({where})`,
-				Font = Enum.Font.SourceSans,
-				TextSize = 14,
-				TextTruncate = Enum.TextTruncate.AtEnd,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
-			})
-			const removeButton = button("삭제", 2, UDim.new(0, 60))
-			removeButton.Activated:Connect(function()
-				task.spawn(run, function()
-					Installer.remove(alias, log)
-				end)
-			end)
-			row(i, { text, removeButton }).Parent = listFrame
-		end
+	const function selected(): Instance?
+		return Selection:Get()[1]
 	end
 
-	const function refreshConfig()
-		sharedBox.Text = Config.getSharedPath()
-		serverPathBox.Text = Config.getServerPath()
-		refreshList()
+	const function requireSpec(): (string, string?)
+		const spec, alias = parseSpec(input.Text)
+		if spec == "" then
+			error("패키지를 입력해주세요 (예: sleitnick/signal@^2)", 0)
+		end
+		return spec, alias
 	end
 
-	pickButton.Activated:Connect(function()
-		const selected = Selection:Get()[1]
-		if selected then
-			locationBox.Text = Config.pathOf(selected)
+	const function install(location: Instance)
+		const spec, alias = requireSpec()
+		Installer.install(spec, { alias = alias, location = location, log = log })
+	end
+
+	addButton("Add", function()
+		install(Installer.sharedRoot())
+	end)
+
+	addButton("Add to Server", function()
+		install(Installer.serverRoot())
+	end)
+
+	addButton("Add to Selected", function()
+		const target = selected()
+		if not target then
+			error("Explorer 에서 설치할 폴더를 선택해주세요", 0)
+		end
+		install(target)
+	end)
+
+	addButton("Remove", function()
+		const alias = trim(input.Text)
+		if alias ~= "" then
+			Installer.remove(alias, nil, log)
+			return
+		end
+		const target = selected()
+		if target and target:GetAttribute(Linker.LINK_ATTRIBUTE) and target.Parent then
+			Installer.remove(target.Name, target.Parent, log)
 		else
-			log("Explorer 에서 폴더를 먼저 선택해주세요")
+			error("지울 별칭을 입력하거나 Explorer 에서 패키지를 선택해주세요", 0)
 		end
 	end)
 
-	serverButton.Activated:Connect(function()
-		server = not server
-		serverButton.Text = if server then "Realm: server" else "Realm: shared"
+	addButton("Install All", function()
+		Installer.installAll(log)
 	end)
 
-	installButton.Activated:Connect(function()
-		task.spawn(run, function()
-			const spec = specBox.Text
-			if string.match(spec, "^%s*$") then
-				error("패키지를 입력해주세요", 0)
-			end
-			const alias = string.match(aliasBox.Text, "^%s*(.-)%s*$")
-			Installer.install(spec, {
-				alias = if alias ~= "" then alias else nil,
-				location = readLocation(),
-				server = server,
-				log = log,
-			})
-		end)
+	addButton("Prune", function()
+		Installer.prune(log)
+		log("정리 완료")
 	end)
 
-	fileButton.Activated:Connect(function()
-		task.spawn(run, function()
-			const alias = string.match(aliasBox.Text, "^%s*(.-)%s*$")
-			Installer.importFiles({
-				alias = if alias ~= "" then alias else nil,
-				location = readLocation(),
-				server = server,
-				log = log,
-			})
-		end)
+	addButton("Import File", function()
+		Installer.importFiles({ location = selected(), log = log })
 	end)
 
-	installAllButton.Activated:Connect(function()
-		task.spawn(run, function()
-			Installer.installAll(log)
-		end)
-	end)
-
-	pruneButton.Activated:Connect(function()
-		task.spawn(run, function()
-			Installer.prune(log)
-		end)
-	end)
-
-	sharedBox.FocusLost:Connect(function()
-		Config.setSharedPath(sharedBox.Text)
-	end)
-	serverPathBox.FocusLost:Connect(function()
-		Config.setServerPath(serverPathBox.Text)
-	end)
-
-	widget:GetPropertyChangedSignal("Enabled"):Connect(function()
-		if widget.Enabled then
-			refreshConfig()
+	const function readPath(): string
+		const target = selected()
+		if target then
+			return Config.pathOf(target)
 		end
+		const text = trim(input.Text)
+		if text == "" then
+			error("Explorer 에서 폴더를 선택하거나 경로를 입력해주세요", 0)
+		end
+		Config.resolvePath(text, true)
+		return text
+	end
+
+	addButton("Set Shared Path", function()
+		const path = readPath()
+		Config.setSharedPath(path)
+		log(`shared 경로: {path}`)
 	end)
-	refreshConfig()
+
+	addButton("Set Server Path", function()
+		const path = readPath()
+		Config.setServerPath(path)
+		log(`server 경로: {path}`)
+	end)
+
+	addButton("Open Config", function()
+		plugin:OpenScript(Config.getModule())
+	end)
+
+	root.Parent = widget
+
+	const ok, data = pcall(Config.read)
+	if ok then
+		log(`shared: {data.shared}`)
+		log(`server: {data.server}`)
+	else
+		log(`오류: {data}`)
+	end
 end
 
 return Ui

@@ -20,4 +20,4 @@ widget:GetPropertyChangedSignal("Enabled"):Connect(function()
 	toggleButton:SetActive(widget.Enabled)
 end)
 
-Ui.mount(widget)
+Ui.mount(widget, plugin)
