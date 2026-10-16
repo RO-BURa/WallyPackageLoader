@@ -52,7 +52,8 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 `add` 는 `wally add` 처럼 Config 에만 적습니다. 실제 설치는 `install` (Install All 버튼) 로 합니다.
 버전을 안 적으면 찾은 버전으로 고정해서 적습니다 (`cayasde/vide-opinionated` -> `cayasde/vide-opinionated@0.4.3`).
 
-### GitHub 로그인 / Wally 업로드 (명령어만)
+### GitHub 로그인 / Wally 업로드
+- 로그인은 명령어로만 합니다. 로그인하면 Logout / Publish 버튼이 나타납니다.
 - 토큰은 `plugin:SetSetting` 으로 **이 컴퓨터에만** 저장되고 플레이스(Config 등)에는 들어가지 않습니다. `login <토큰>` 은 로그와 입력 기록에 남지 않습니다.
 - `login` 은 할 때마다 주의 사항을 보여주고, `privacy` / `terms` 를 읽고 동의한다는 뜻으로 `--agree` 를 붙여야 진행합니다.
 - `login --agree`: `wally login` 과 같은 GitHub 기기 로그인입니다 (Wally 의 GitHub OAuth 앱, `read:user` 권한).
@@ -76,6 +77,7 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 | Open Config | Config 스크립트 열기 |
 | Set Shared Path / Set Server Path | Explorer 에서 선택한 폴더(없으면 입력한 경로)로 설정 |
 | List / Help | 설치한 패키지 목록 / 명령어 도움말 |
+| Logout / Publish | **로그인했을 때만 보임.** 로그아웃 / 입력창 내용으로 `publish` (예: `ro-bura/x@1.0.0`, 실제로 올리려면 `--yes` 까지) |
 
 ## 설정 (ServerStorage.PackageLoaderConfig)
 직접 고칠 수 있는 ModuleScript 이고 Team Create 로 공유됩니다. 직접 고친 뒤에는 **Install All** 을 누릅니다.
