@@ -34,11 +34,10 @@ ReplicatedStorage/Packages/
 ## 빌드
 ```bash
 rokit install
-# Windows
-rojo build -o "$LOCALAPPDATA/Roblox/Plugins/WallyPackageLoader.rbxm"
-# macOS
-rojo build -o ~/Documents/Roblox/Plugins/WallyPackageLoader.rbxm
+rojo build --plugin WallyPackageLoader.rbxm
 ```
+`--plugin` 은 Studio 의 로컬 플러그인 폴더에 바로 빌드합니다.
+
 처음 사용할 때 Studio 가 HTTP 요청(api.wally.run, api.github.com, codeload.github.com)과
 스크립트 삽입 권한을 물어봅니다.
 
@@ -65,3 +64,6 @@ rojo build -o ~/Documents/Roblox/Plugins/WallyPackageLoader.rbxm
 - [roblox-package-manager](https://github.com/McThor2/roblox-package-manager) (MIT) - Wally API 사용법, 파일 변환, 설정 저장 방식
 - [pesde](https://github.com/pesde-pkg/pesde) (MIT) - thunk 의 타입 re-export 로직 (`src/linking/generator.rs`)
 - [wally-package-types](https://github.com/JohnnyMorganz/wally-package-types) (MIT) - 타입 re-export 아이디어
+
+## 라이선스
+[MIT](LICENSE)
