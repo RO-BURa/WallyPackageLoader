@@ -5,6 +5,7 @@ const TextService = game:GetService("TextService")
 
 const Commands = require(script.Parent.Commands)
 const Config = require(script.Parent.Config)
+const Fmt = require(script.Parent.Fmt)
 const Installer = require(script.Parent.Installer)
 const Log = require(script.Parent.Log)
 
@@ -15,7 +16,6 @@ const LOG_FONT = Enum.Font.Code
 const LOG_TEXT_SIZE = 13
 const LOG_PADDING_X = 6
 const LOG_PADDING_Y = 4
-const COMMAND_COLOR = "#3B8EEA"
 const MAX_HISTORY = 50
 
 const function themeColor(color: Enum.StudioStyleGuideColor): Color3
@@ -127,8 +127,8 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	top:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutLog)
 	layoutLog()
 
-	type LogLine = { text: string, command: boolean }
-	const logLines: { LogLine } = {}
+	-- 줄마다 RichText 서식 (색은 Fmt 의 "$이름", 그릴 때 테마 색으로 바꿈)
+	const logLines: { string } = {}
 
 	-- 터미널처럼: 맨 아래에 있으면 새 로그를 따라 내려가고, 위로 스크롤해서 보고 있으면 그대로 둠
 	local followBottom = true
@@ -140,26 +140,22 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		followBottom = logFrame.CanvasPosition.Y >= bottomY() - 4
 	end)
 
+	const function isDarkTheme(): boolean
+		const background = themeColor(Enum.StudioStyleGuideColor.MainBackground)
+		return (background.R + background.G + background.B) / 3 < 0.5
+	end
+
 	const function render()
-		const rich, plain = {}, {}
-		for _, line in logLines do
-			const escaped = string.gsub(string.gsub(string.gsub(line.text, "&", "&amp;"), "<", "&lt;"), ">", "&gt;")
-			if line.command then
-				table.insert(rich, `<font color="{COMMAND_COLOR}">●</font> {escaped}`)
-				table.insert(plain, `● {line.text}`)
-			else
-				table.insert(rich, escaped)
-				table.insert(plain, line.text)
-			end
-		end
+		const markup = table.concat(logLines, "\n")
+		const plain = Fmt.strip(markup)
 
 		const width = math.max(1, logFrame.AbsoluteWindowSize.X - LOG_PADDING_X * 2)
-		const textHeight = if #plain == 0
+		const textHeight = if #logLines == 0
 			then 0
-			else TextService:GetTextSize(table.concat(plain, "\n"), LOG_TEXT_SIZE, LOG_FONT, Vector2.new(width, 1e6)).Y
+			else TextService:GetTextSize(plain, LOG_TEXT_SIZE, LOG_FONT, Vector2.new(width, 1e6)).Y
 
 		const wasFollowing = followBottom
-		logLabel.Text = table.concat(rich, "\n")
+		logLabel.Text = Fmt.resolve(markup, isDarkTheme())
 		logLabel.Size = UDim2.new(1, -LOG_PADDING_X * 2, 0, textHeight)
 		canvasHeight = textHeight + LOG_PADDING_Y * 2
 		logFrame.CanvasSize = UDim2.fromOffset(0, canvasHeight)
@@ -170,30 +166,42 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	end
 	logFrame:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(render)
 
-	const function push(text: string, command: boolean)
-		for _, line in string.split(text, "\n") do
-			table.insert(logLines, { text = line, command = command })
+	const function rich(markup: string)
+		for _, line in string.split(markup, "\n") do
+			table.insert(logLines, line)
 		end
 		while #logLines > MAX_LOG_LINES do
 			table.remove(logLines, 1)
 		end
 		render()
 	end
+	-- 일반 글자: "오류:", "완료:" 같은 라벨에 색
 	const function log(message: string)
-		push(message, false)
+		const lines = {}
+		for _, line in string.split(message, "\n") do
+			table.insert(lines, Fmt.line(line))
+		end
+		rich(table.concat(lines, "\n"))
 	end
 	-- 입력한 명령은 앞에 파란 원
 	const function logCommand(line: string)
-		push(line, true)
+		rich(Fmt.color("blue", "●") .. " " .. Fmt.bold(Fmt.escape(line)))
 	end
 	const function clear()
 		table.clear(logLines)
 		followBottom = true
 		render()
 	end
+
+	-- Studio 테마가 바뀌면 색 다시 칠함
+	settings().Studio.ThemeChanged:Connect(function()
+		logFrame.BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.ScriptBackground)
+		logLabel.TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText)
+		render()
+	end)
 	Log.setSink(log)
 
-	const context: Commands.Context = { plugin = plugin, log = log, clear = clear }
+	const context: Commands.Context = { plugin = plugin, log = log, rich = rich, clear = clear }
 
 	-- 작업은 하나씩만, 오류는 로그로
 	local busy = false

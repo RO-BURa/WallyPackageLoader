@@ -3,12 +3,16 @@
 const Selection = game:GetService("Selection")
 
 const Config = require(script.Parent.Config)
+const Fmt = require(script.Parent.Fmt)
 const Installer = require(script.Parent.Installer)
 const Linker = require(script.Parent.Linker)
 
 export type Context = {
 	plugin: Plugin,
+	-- 일반 글자 (라벨에 자동으로 색)
 	log: (message: string) -> (),
+	-- RichText 서식이 들어간 줄 (Fmt 사용)
+	rich: (markup: string) -> (),
 	clear: () -> (),
 }
 
@@ -20,25 +24,107 @@ export type Flags = {
 
 const Commands = {}
 
-const HELP = {
-	"asdf = ro-bura/signal            add 와 같음 (명령어 없이 입력)",
-	"add <패키지> [--server | --selected | --to <경로>]",
-	"    add ro-bura/signal            별칭 자동 (Signal)",
-	"    add asdf = ro-bura/signal@^1  별칭 asdf",
-	"    add gh:owner/repo#main --to ServerStorage/Libs",
-	"remove <별칭 | 패키지>            remove asdf / remove ro-bura/signal",
-	"    (아무것도 안 쓰면 Explorer 에서 선택한 패키지)",
-	"install                          Config 에 적힌 패키지 전체 설치",
-	"import [--server | --selected | --to <경로>]   파일에서 가져오기",
-	"path shared <경로 | --selected>  shared 경로 설정",
-	"path server <경로 | --selected>  server 경로 설정",
-	"list                             설치한 패키지 목록",
-	"prune                            안 쓰는 _Index 폴더 정리",
-	"config                           Config 스크립트 열기",
-	"clear                            로그 지우기",
-	"help                             이 도움말",
-	"↑ / ↓ 로 이전에 입력한 명령을 불러올 수 있음",
+type HelpEntry = {
+	summary: string,
+	usage: { string },
+	args: { { string } }?,
+	options: { { string } }?,
+	examples: { string }?,
 }
+
+const COMMAND_ORDER = { "add", "remove", "install", "import", "path", "list", "prune", "config", "clear", "help" }
+
+const LOCATION_OPTIONS = {
+	{ "--server", "server 경로에" },
+	{ "--selected", "Explorer 에서 선택한 폴더에" },
+	{ "--to <경로>", "지정한 경로에 (예: ServerStorage/Libs)" },
+}
+
+const HELP: { [string]: HelpEntry } = {
+	add = {
+		summary = "패키지 설치",
+		usage = { "add [<별칭> =] <패키지> [옵션]", "<별칭> = <패키지>" },
+		args = {
+			{ "<별칭>", "thunk 이름. 없으면 패키지 이름 (signal -> Signal)" },
+			{ "<패키지>", "sleitnick/signal@^2      Wally" },
+			{ "", "gh:owner/repo@^1         GitHub 태그" },
+			{ "", "gh:owner/repo#main       GitHub 브랜치 / 태그 / 커밋" },
+		},
+		options = LOCATION_OPTIONS,
+		examples = { "add ro-bura/signal", "asdf = ro-bura/signal@^1", "add gh:owner/repo#main --to ServerStorage/Libs" },
+	},
+	remove = {
+		summary = "패키지 삭제 (rm)",
+		usage = { "remove <별칭 | 패키지>", "remove" },
+		args = {
+			{ "<별칭>", "Config 에 적힌 이름 (asdf)" },
+			{ "<패키지>", "패키지 이름, 버전 무시 (ro-bura/signal)" },
+			{ "(없음)", "Explorer 에서 선택한 패키지" },
+		},
+		examples = { "remove asdf", "rm ro-bura/signal" },
+	},
+	install = {
+		summary = "Config 에 적힌 패키지 전체 설치",
+		usage = { "install" },
+	},
+	import = {
+		summary = "파일에서 가져오기 (.lua / .luau 여러 개, .zip)",
+		usage = { "import [옵션]" },
+		options = LOCATION_OPTIONS,
+	},
+	path = {
+		summary = "shared / server 경로 설정",
+		usage = { "path shared <경로 | --selected>", "path server <경로 | --selected>" },
+		examples = { "path shared ReplicatedStorage/Packages", "path server --selected" },
+	},
+	list = {
+		summary = "설치한 패키지 목록 (ls)",
+		usage = { "list" },
+	},
+	prune = {
+		summary = "안 쓰는 _Index 폴더 정리",
+		usage = { "prune" },
+	},
+	config = {
+		summary = "Config 스크립트 열기",
+		usage = { "config" },
+	},
+	clear = {
+		summary = "로그 지우기",
+		usage = { "clear" },
+	},
+	help = {
+		summary = "도움말",
+		usage = { "help", "help <명령어>" },
+	},
+}
+
+const INDENT = "    "
+
+const function section(context: Context, title: string)
+	context.rich("")
+	context.rich(Fmt.color("yellow", Fmt.bold(title .. ":")))
+end
+
+-- 이름이 ASCII 인 짧은 목록: 한 줄에 이름 + 설명
+const function nameRows(context: Context, rows: { { string } }, width: number)
+	for _, row in rows do
+		context.rich(INDENT .. Fmt.color("green", Fmt.escape(Fmt.pad(row[1], width))) .. Fmt.escape(row[2]))
+	end
+end
+
+-- 자세한 목록 (rojo --help 형식): 이름 줄 아래에 설명을 들여씀. 이름이 "" 면 앞 항목 설명이 이어짐
+const function detailRows(context: Context, rows: { { string } })
+	for index, row in rows do
+		if row[1] ~= "" then
+			if index > 1 then
+				context.rich("")
+			end
+			context.rich(INDENT .. Fmt.color("green", Fmt.escape(row[1])))
+		end
+		context.rich(INDENT .. INDENT .. Fmt.escape(row[2]))
+	end
+end
 
 const function trim(text: string): string
 	return (string.gsub(text, "^%s*(.-)%s*$", "%1"))
@@ -199,14 +285,62 @@ function Commands.list(context: Context)
 	for _, entry in entries do
 		const folder = Config.resolvePath(entry.location, false)
 		const installed = folder and folder:FindFirstChild(entry.alias)
-		context.log(`{entry.alias} = {entry.spec}  ({entry.location}){if installed then "" else "  [설치 안 됨]"}`)
+		context.rich(
+			Fmt.color("green", Fmt.bold(Fmt.escape(entry.alias)))
+				.. " = "
+				.. Fmt.escape(entry.spec)
+				.. "  "
+				.. Fmt.color("dim", `({Fmt.escape(entry.location)})`)
+				.. (if installed then "" else "  " .. Fmt.color("yellow", "[설치 안 됨]"))
+		)
 	end
 end
 
-function Commands.help(context: Context)
-	for _, line in HELP do
-		context.log(line)
+-- help: 전체 목록, help <명령어>: 자세히 (rojo --help 형식)
+function Commands.help(context: Context, topic: string?)
+	if topic and topic ~= "" then
+		const name = if topic == "rm" then "remove" elseif topic == "ls" then "list" else string.lower(topic)
+		const entry = HELP[name]
+		if not entry then
+			error(`알 수 없는 명령어: {topic} (help 로 목록 확인)`, 0)
+		end
+
+		context.rich(Fmt.color("green", Fmt.bold(name)))
+		context.rich(Fmt.escape(entry.summary))
+		section(context, "USAGE")
+		for _, usage in entry.usage do
+			context.rich(INDENT .. Fmt.escape(usage))
+		end
+		if entry.args then
+			section(context, "ARGS")
+			detailRows(context, entry.args)
+		end
+		if entry.options then
+			section(context, "OPTIONS")
+			detailRows(context, entry.options)
+		end
+		if entry.examples then
+			section(context, "EXAMPLES")
+			for _, example in entry.examples do
+				context.rich(INDENT .. Fmt.color("dim", "> ") .. Fmt.escape(example))
+			end
+		end
+		return
 	end
+
+	context.rich(Fmt.bold("PackageLoader"))
+	context.rich("Wally / GitHub / 파일에서 패키지를 바로 불러옴")
+	section(context, "USAGE")
+	context.rich(INDENT .. Fmt.escape("<명령어> [인자] [옵션]"))
+	context.rich(INDENT .. Fmt.escape("<별칭> = <패키지>") .. "     " .. Fmt.color("dim", "명령어 없이 치면 add"))
+	section(context, "COMMANDS")
+	const rows = {}
+	for _, name in COMMAND_ORDER do
+		table.insert(rows, { name, HELP[name].summary })
+	end
+	nameRows(context, rows, 10)
+	context.rich("")
+	context.rich(Fmt.color("dim", Fmt.escape("help <명령어> 로 자세히, ↑ / ↓ 로 이전 명령")))
 end
 
 function Commands.openConfig(context: Context)
@@ -252,7 +386,7 @@ function Commands.run(line: string, context: Context)
 	elseif command == "clear" then
 		context.clear()
 	elseif command == "help" or command == "?" then
-		Commands.help(context)
+		Commands.help(context, args[1])
 	else
 		const addArgs, addFlags = takeFlags(filtered)
 		Commands.add(table.concat(addArgs, " "), addFlags, context)
