@@ -332,36 +332,6 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 
 	root.Parent = widget
 
-	-- TODO: 임시 디버그용. 문제 확인되면 지울 것
-	_G.PackageLoaderGui = {
-		widget = widget,
-		root = root,
-		top = top,
-		input = input,
-		buttonGrid = buttonGrid,
-		logFrame = logFrame,
-		logLabel = logLabel,
-		logLines = logLines,
-		history = history,
-		context = context,
-		log = log,
-		run = function(line: string)
-			Commands.run(line, context)
-		end,
-		state = function()
-			return {
-				busy = busy,
-				followBottom = followBottom,
-				canvasHeight = canvasHeight,
-				estimatedHeight = estimatedHeight,
-				textBounds = logLabel.TextBounds,
-				canvas = logFrame.AbsoluteCanvasSize,
-				window = logFrame.AbsoluteWindowSize,
-				position = logFrame.CanvasPosition,
-			}
-		end,
-	}
-
 	const ok, data = pcall(Config.read)
 	if ok then
 		log(`shared: {data.shared}`)
