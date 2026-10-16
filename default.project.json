@@ -1,0 +1,6 @@
+{
+  "name": "WallyPackageLoader",
+  "tree": {
+    "$path": "src"
+  }
+}
