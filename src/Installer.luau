@@ -12,9 +12,8 @@ type Package = Types.Package
 
 export type InstallOptions = {
 	alias: string?,
-	-- 설치할 폴더. 없으면 Config 의 Shared/Server 경로
+	-- 설치할 폴더. 없으면 Config 의 shared 경로
 	location: Instance?,
-	server: boolean?,
 	-- Config 에 의존성으로 저장할지 (기본 true)
 	save: boolean?,
 	log: ((message: string) -> ())?,
@@ -122,9 +121,10 @@ placePackage = function(context: Context, package: Package, root: Instance): (In
 end
 
 const function newContext(log: ((string) -> ())?): Context
+	const data = Config.read()
 	return {
-		sharedRoot = Config.resolvePath(Config.getSharedPath(), true) :: Instance,
-		serverRoot = Config.resolvePath(Config.getServerPath(), true) :: Instance,
+		sharedRoot = Config.resolvePath(data.shared, true) :: Instance,
+		serverRoot = Config.resolvePath(data.server, true) :: Instance,
 		log = log or print,
 		created = {},
 		resolving = {},
@@ -137,17 +137,18 @@ const function rollback(context: Context)
 	end
 end
 
-const function getBase(context: Context, options: InstallOptions): Instance
-	if options.location then
-		return options.location
-	end
-	return if options.server then context.serverRoot else context.sharedRoot
+function Installer.sharedRoot(): Instance
+	return Config.resolvePath(Config.getSharedPath(), true) :: Instance
+end
+
+function Installer.serverRoot(): Instance
+	return Config.resolvePath(Config.getServerPath(), true) :: Instance
 end
 
 -- 패키지 하나를 의존성까지 설치. 별칭 반환
 function Installer.installPackage(package: Package, options: InstallOptions, spec: string?): string
 	const context = newContext(options.log)
-	const base = getBase(context, options)
+	const base = options.location or context.sharedRoot
 	const alias = options.alias or Installer.defaultAlias(package.name)
 
 	const ok, err = pcall(function()
@@ -160,13 +161,9 @@ function Installer.installPackage(package: Package, options: InstallOptions, spe
 	end
 
 	if spec and options.save ~= false then
-		Config.setDependency(alias, {
-			spec = spec,
-			realm = if options.server then "server" else "shared",
-			location = if options.location then Config.pathOf(options.location) else nil,
-		})
+		Config.addDependency(alias, spec, Config.pathOf(base))
 	end
-	context.log(`완료: {alias} -> {package.scope}/{package.name}@{package.version}`)
+	context.log(`완료: {alias} -> {package.scope}/{package.name}@{package.version} ({Config.pathOf(base)})`)
 	return alias
 end
 
@@ -174,30 +171,40 @@ function Installer.install(spec: string, options: InstallOptions): string
 	return Installer.installPackage(Installer.resolve(spec), options, spec)
 end
 
--- Config 에 저장된 의존성 전체 설치 (wally install 과 비슷)
+-- Config 에 적힌 의존성 전체 설치 (wally install 과 비슷)
 function Installer.installAll(log: ((string) -> ())?)
 	const logger = log or print
-	for alias, dependency in Config.getDependencies() do
-		const location = if dependency.location then Config.resolvePath(dependency.location, true) else nil
-		const ok, err = pcall(Installer.install, dependency.spec, {
-			alias = alias,
-			location = location,
-			server = dependency.realm == "server",
-			save = false,
-			log = logger,
-		})
+	const entries = Config.entries()
+	if #entries == 0 then
+		logger("Config 에 적힌 패키지가 없음")
+		return
+	end
+	for _, entry in entries do
+		const ok, err = pcall(function()
+			Installer.install(entry.spec, {
+				alias = entry.alias,
+				location = Config.resolvePath(entry.location, true),
+				save = false,
+				log = logger,
+			})
+		end)
 		if not ok then
-			logger(`실패: {alias} ({dependency.spec}) - {err}`)
+			logger(`실패: {entry.alias} ({entry.spec}) - {err}`)
 		end
 	end
 end
 
--- 파일에서 가져오기
+-- 파일에서 가져오기 (여러 개 선택 가능)
 function Installer.importFiles(options: InstallOptions)
 	const context = newContext(options.log)
-	const base = getBase(context, options)
+	const base = options.location or context.sharedRoot
+	const files = File.prompt()
+	if #files == 0 then
+		context.log("선택한 파일이 없음")
+		return
+	end
 
-	for _, file in File.prompt() do
+	for _, file in files do
 		const ok, err = pcall(function()
 			const imported = File.read(file)
 			if imported.kind == "script" then
@@ -209,7 +216,7 @@ function Installer.importFiles(options: InstallOptions)
 				module.Name = imported.name
 				;(module :: any).Source = imported.source
 				module.Parent = base
-				context.log(`가져옴: {imported.name}`)
+				context.log(`가져옴: {imported.name} ({Config.pathOf(base)})`)
 			elseif imported.kind == "package" then
 				Installer.installPackage(imported.package, {
 					alias = options.alias,
@@ -226,7 +233,7 @@ function Installer.importFiles(options: InstallOptions)
 					existing:Destroy()
 				end
 				instance.Parent = base
-				context.log(`가져옴: {imported.name}`)
+				context.log(`가져옴: {imported.name} ({Config.pathOf(base)})`)
 			end
 		end)
 		if not ok then
@@ -235,23 +242,36 @@ function Installer.importFiles(options: InstallOptions)
 	end
 end
 
--- 루트에 있는 thunk 를 지우고 Config 에서도 뺀 뒤 쓰이지 않는 엔트리 정리
-function Installer.remove(alias: string, log: ((string) -> ())?)
+-- thunk 를 지우고 Config 에서도 뺀 뒤 쓰이지 않는 엔트리 정리
+-- base 가 없으면 Config 에서 별칭으로 찾음
+function Installer.remove(alias: string, base: Instance?, log: ((string) -> ())?)
 	const logger = log or print
-	const dependency = Config.getDependencies()[alias]
-	if dependency then
-		const context = newContext(logger)
-		const base = if dependency.location
-			then Config.resolvePath(dependency.location, false)
-			else (if dependency.realm == "server" then context.serverRoot else context.sharedRoot)
-		const thunk = base and base:FindFirstChild(alias)
-		if thunk and thunk:GetAttribute(Linker.LINK_ATTRIBUTE) then
-			thunk:Destroy()
+	local location: string
+	if base then
+		location = Config.pathOf(base)
+	else
+		const matches = {}
+		for _, entry in Config.entries() do
+			if entry.alias == alias then
+				table.insert(matches, entry.location)
+			end
 		end
-		Config.setDependency(alias, nil)
+		if #matches == 0 then
+			error(`Config 에 '{alias}' 가 없음`, 0)
+		elseif #matches > 1 then
+			error(`'{alias}' 가 여러 곳에 있음 ({table.concat(matches, ", ")}). Explorer 에서 지울 것을 선택하고 Remove 를 눌러주세요`, 0)
+		end
+		location = matches[1]
 	end
+
+	const folder = Config.resolvePath(location, false)
+	const thunk = folder and folder:FindFirstChild(alias)
+	if thunk and thunk:GetAttribute(Linker.LINK_ATTRIBUTE) then
+		thunk:Destroy()
+	end
+	Config.removeDependency(alias, location)
 	Installer.prune(logger)
-	logger(`삭제됨: {alias}`)
+	logger(`삭제됨: {alias} ({location})`)
 end
 
 -- 어디서도 쓰이지 않는 _Index 엔트리 삭제
