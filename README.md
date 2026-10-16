@@ -42,7 +42,7 @@ login --agree [--remember]            GitHub 기기 로그인 (Wally 업로드 +
 login <토큰> --agree [--remember]     직접 만든 GitHub 토큰 (GitHub 요청 한도만)
 logout / whoami                       로그아웃 / 로그인한 계정
 cancel                                기다리는 중인 GitHub 로그인 취소 (다른 작업 중에도 실행됨)
-publish <scope/name@버전> [--server] [--deps] [--yes]   선택한 것을 Wally 에 업로드
+publish [--yes | --no]                선택한 패키지를 Wally 에 업로드 (패키지 안의 wally.toml 사용)
 clear                                 로그 지우기
 license                               라이선스와 참고한 프로젝트 고지
 privacy / terms                       개인정보 처리 안내 / 이용 약관
@@ -54,7 +54,7 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 버전을 안 적으면 찾은 버전으로 고정해서 적습니다 (`cayasde/vide-opinionated` -> `cayasde/vide-opinionated@0.4.3`).
 
 ### GitHub 로그인 / Wally 업로드
-- 로그인은 명령어로만 합니다. 로그인하면 Logout / Publish 버튼이 나타납니다.
+- 로그인은 명령어로만 합니다. 로그인하면 Logout / Prepare Publish 버튼이 나타납니다.
 - 토큰은 기본적으로 **메모리에만** 있고 Studio 를 끄면 사라집니다. `--remember` 를 붙이면 `plugin:SetSetting` 으로 이 컴퓨터에 저장해서 로그인이 유지되지만,
   설정은 암호화되지 않고 다른 로컬 플러그인이 읽을 수 있습니다. 플레이스(Config 등)에는 어느 경우에도 들어가지 않습니다.
 - `login <토큰>` 은 로그와 입력 기록에 남지 않습니다.
@@ -63,11 +63,18 @@ help [명령어]                         도움말 (help add 처럼 자세히)
   나오는 주소(github.com/login/device)에서 코드를 입력하고 승인하면 됩니다.
 - `login <토큰> --agree`: 직접 만든 토큰 (권한 없이 만들어도 됨). GitHub API 요청 한도만 늘어납니다 (시간당 60 -> 5000).
   Wally 서버는 Wally 앱으로 받은 토큰만 받기 때문에 업로드는 `login` 으로 해야 합니다.
-- `publish`: Explorer 에서 선택한 것 (보통 패키지 ModuleScript) 을 Rojo 형식 파일 + `wally.toml` + `default.project.json` 으로 묶어 올립니다.
+- `publish`: `wally publish` 처럼 패키지 안의 `wally.toml` 을 매니페스트로 씁니다.
+  1. Explorer 에서 패키지 (보통 ModuleScript) 를 선택하고 `publish` (Prepare Publish 버튼).
+     `wally.toml` 이 없으면 패키지 안에 `wally.toml` ModuleScript 를 만들어 열어줍니다. name / version / description / authors / 의존성 등을 채웁니다.
+     내용은 진짜 TOML 이라 기존 wally.toml 을 그대로 붙여넣어도 됩니다 (`return [==[ ... ]==]` 로 감싸도, 안 감싸도 됨).
+  2. 다시 `publish` 하면 올릴 파일과 `wally.toml` 을 미리보기로 보여줍니다.
+  3. `publish --yes` 로 방금 본 것을 업로드, `publish --no` 로 취소. 미리보기 뒤에 바뀌었으면 올리지 않고 다시 보여줍니다.
+  - `wally.toml` 스크립트는 업로드에서 빠지고 zip 의 `wally.toml` 파일이 됩니다.
   - ModuleScript / Script / LocalScript -> `.luau`, Folder -> 폴더, StringValue -> `.txt`, 그 외 -> `.rbxm`
-  - scope 는 GitHub 아이디 (또는 이미 가진 scope), 이름은 소문자
-  - `--deps`: Config 의 dependencies / serverDependencies 중 Wally 패키지를 의존성으로 넣음
-  - `--yes` 가 없으면 올릴 파일과 `wally.toml` 만 보여줍니다. **같은 버전은 다시 올릴 수 없고, 올린 것은 지울 수 없습니다.**
+  - Packages 의 thunk 를 선택하면 가리키는 진짜 모듈을 올립니다.
+  - 의존성은 Wally 패키지 (`scope/name@버전`) 만 됩니다. 코드에서는 `require(script.Parent.별칭)` 으로 부릅니다.
+    개발할 땐 패키지를 shared 경로 (`ReplicatedStorage/Packages`) 안에 두면 옆의 thunk 로 의존성이 바로 동작합니다.
+  - **같은 버전은 다시 올릴 수 없고, 올린 것은 지울 수 없습니다.**
 
 ### 버튼
 | 버튼 | 동작 |
@@ -80,7 +87,7 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 | Open Config | Config 스크립트 열기 |
 | Set Shared Path / Set Server Path | Explorer 에서 선택한 폴더(없으면 입력한 경로)로 설정 |
 | List / Help | 설치한 패키지 목록 / 명령어 도움말 |
-| Logout / Publish | **로그인했을 때만 보임.** 로그아웃 / 입력창 내용으로 `publish` (예: `ro-bura/x@1.0.0`, 실제로 올리려면 `--yes` 까지) |
+| Logout / Prepare Publish | **로그인했을 때만 보임.** 로그아웃 / 선택한 패키지에 `wally.toml` 을 만들거나 미리보기 (업로드는 `publish --yes`) |
 
 ## 설정 (ServerStorage.PackageLoaderConfig)
 직접 고칠 수 있는 ModuleScript 이고 Team Create 로 공유됩니다. 직접 고친 뒤에는 **Install All** 을 누릅니다.

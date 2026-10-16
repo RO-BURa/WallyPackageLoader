@@ -23,9 +23,9 @@ export type Flags = {
 	server: boolean,
 	selected: boolean,
 	to: string?,
-	-- publish 용
-	deps: boolean?,
+	-- publish 용 (미리보기 본 것을 올림 / 취소)
 	yes: boolean?,
+	no: boolean?,
 	-- login 용 (주의 사항, privacy, terms 에 동의 / 토큰을 Studio 설정에 저장)
 	agree: boolean?,
 	remember: boolean?,
@@ -39,6 +39,7 @@ type HelpEntry = {
 	args: { { string } }?,
 	options: { { string } }?,
 	examples: { string }?,
+	notes: { string }?,
 }
 
 const COMMAND_ORDER = {
@@ -152,17 +153,19 @@ const HELP: { [string]: HelpEntry } = {
 		usage = { "whoami" },
 	},
 	publish = {
-		summary = "Explorer 에서 선택한 것을 Wally 에 업로드 (login 필요)",
-		usage = { "publish <scope/name@버전> [옵션]" },
-		args = {
-			{ "<scope/name@버전>", "scope 는 GitHub 아이디 (또는 이미 가진 scope), 소문자" },
-		},
+		summary = "Explorer 에서 선택한 패키지를 Wally 에 업로드 (패키지 안의 wally.toml 사용)",
+		usage = { "publish [--yes | --no]" },
 		options = {
-			{ "--server", "server realm 패키지로" },
-			{ "--deps", "Config 의 dependencies / serverDependencies 를 의존성으로 넣음 (Wally 패키지만)" },
-			{ "--yes", "실제로 업로드. 없으면 올릴 내용만 보여줌. 같은 버전은 다시 못 올리고 올린 건 못 지움" },
+			{ "(없음)", "wally.toml 이 없으면 만들어서 열고, 있으면 올릴 내용을 미리보기" },
+			{ "--yes", "방금 미리보기 한 것을 업로드 (login 필요). 같은 버전은 다시 못 올리고 올린 건 못 지움" },
+			{ "--no", "미리보기 한 것을 취소" },
 		},
-		examples = { "publish ro-bura/signal@1.0.0", "publish ro-bura/signal@1.0.0 --deps --yes" },
+		examples = { "publish", "publish --yes" },
+		notes = {
+			"wally.toml 은 패키지 안의 ModuleScript (업로드할 땐 빠지고 zip 의 wally.toml 이 됨)",
+			"의존성은 [dependencies] 에 적고 코드에서 require(script.Parent.별칭)",
+			"개발할 땐 패키지를 shared 경로 (Packages) 안에 두면 옆의 thunk 로 의존성이 바로 됨",
+		},
 	},
 	privacy = {
 		summary = "개인정보 처리 안내 (토큰을 어디에 저장하고 어디로 보내는지)",
@@ -270,10 +273,10 @@ const function takeFlags(words: { string }): ({ string }, Flags)
 			flags.server = true
 		elseif word == "--selected" then
 			flags.selected = true
-		elseif word == "--deps" then
-			flags.deps = true
 		elseif word == "--yes" then
 			flags.yes = true
+		elseif word == "--no" then
+			flags.no = true
 		elseif word == "--agree" then
 			flags.agree = true
 		elseif word == "--remember" then
@@ -450,6 +453,12 @@ function Commands.help(context: Context, topic: string?)
 				context.rich(INDENT .. Fmt.color("dim", "> ") .. Fmt.escape(example))
 			end
 		end
+		if entry.notes then
+			section(context, "NOTES")
+			for _, note in entry.notes do
+				context.rich(INDENT .. Fmt.escape(note))
+			end
+		end
 		return
 	end
 
@@ -510,22 +519,10 @@ function Commands.login(token: string?, flags: Flags, context: Context)
 	context.log(`완료: {Auth.whoami()} 로 로그인 (기기 로그인, {rememberText(flags)})`)
 end
 
-function Commands.publish(spec: string?, flags: Flags, context: Context)
-	if not spec then
-		error("publish <scope/name@버전> (help publish)", 0)
-	end
-	const source = selected()
-	if not source then
-		error("Explorer 에서 올릴 것을 선택해주세요 (보통 패키지 ModuleScript)", 0)
-	end
+-- publish 미리보기 한 것 (publish --yes 가 올릴 것)
+local pendingPublish: Publisher.Prepared? = nil
 
-	const prepared = Publisher.prepare(source, {
-		spec = spec,
-		server = flags.server,
-		withConfigDependencies = flags.deps == true,
-		log = context.log,
-	})
-
+const function previewPublish(prepared: Publisher.Prepared, context: Context)
 	section(context, "FILES")
 	for _, path in prepared.paths do
 		context.rich(INDENT .. Fmt.escape(path) .. "  " .. Fmt.color("dim", `({#prepared.files[path]} bytes)`))
@@ -537,14 +534,49 @@ function Commands.publish(spec: string?, flags: Flags, context: Context)
 		end
 	end
 	context.rich("")
+	pendingPublish = prepared
+	context.log(`경고: 아직 안 올림. {prepared.name}@{prepared.version} 을 올리려면 publish --yes, 취소는 publish --no`)
+end
 
-	if not flags.yes then
-		context.log(`경고: 아직 안 올림. 같은 버전은 다시 못 올리고 올린 건 못 지우니 확인 후 --yes 를 붙여주세요`)
+function Commands.publish(flags: Flags, context: Context)
+	if flags.no then
+		context.log(if pendingPublish then "완료: publish 취소" else "취소할 publish 가 없음")
+		pendingPublish = nil
 		return
 	end
-	context.log(`확인 중: {prepared.name}@{prepared.version} 업로드`)
-	Publisher.upload(prepared)
-	context.log(`완료: {prepared.name}@{prepared.version} 업로드`)
+
+	if flags.yes then
+		const pending = pendingPublish
+		if not pending then
+			error("먼저 publish 로 미리보기를 확인해주세요", 0)
+		end
+		-- 미리보기 뒤에 바뀌었으면 다시 확인
+		const prepared = Publisher.prepare(pending.source, context.log)
+		if prepared.zip ~= pending.zip then
+			context.log("경고: 미리보기 뒤에 패키지나 wally.toml 이 바뀜. 다시 확인해주세요")
+			previewPublish(prepared, context)
+			return
+		end
+		context.log(`확인 중: {prepared.name}@{prepared.version} 업로드`)
+		Publisher.upload(prepared)
+		pendingPublish = nil
+		context.log(`완료: {prepared.name}@{prepared.version} 업로드`)
+		return
+	end
+
+	const target = selected()
+	if not target then
+		error("Explorer 에서 올릴 패키지를 선택해주세요 (보통 패키지 ModuleScript)", 0)
+	end
+	const source = Publisher.findSource(target)
+	if not Publisher.getManifest(source) then
+		const login = if Auth.getToken() then select(2, pcall(Auth.whoami)) else nil
+		const manifest = Publisher.createManifest(source, if type(login) == "string" then login else nil)
+		context.plugin:OpenScript(manifest)
+		context.log(`완료: {source.Name} 안에 {Publisher.MANIFEST_NAME} 을 만듦. name / version 등을 채운 뒤 다시 publish`)
+		return
+	end
+	previewPublish(Publisher.prepare(source, context.log), context)
 end
 
 -- 한 줄 실행. 첫 단어가 명령어가 아니면 add 로 처리
@@ -603,7 +635,7 @@ function Commands.run(line: string, context: Context)
 			`로그인: {Auth.whoami()} ({if Auth.kind() == "device" then "기기 로그인" else "토큰"}, {if Auth.isRemembered() then "이 컴퓨터에 저장됨" else "Studio 를 끄면 로그아웃"})`
 		)
 	elseif command == "publish" then
-		Commands.publish(args[1], flags, context)
+		Commands.publish(flags, context)
 	elseif command == "privacy" then
 		context.rich(Fmt.escape(LicenseText.privacy()))
 	elseif command == "terms" then

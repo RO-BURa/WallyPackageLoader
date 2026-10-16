@@ -56,8 +56,9 @@ function Installer.resolve(spec: string): Package
 end
 
 type Context = {
-	sharedRoot: Instance,
-	serverRoot: Instance,
+	-- 실제로 쓸 때 만듦 (설치할 게 없으면 폴더를 안 만들게)
+	sharedRoot: () -> Instance,
+	serverRoot: () -> Instance,
 	log: (message: string) -> (),
 	-- 이번 설치에서 새로 만든 엔트리 (실패하면 지움)
 	created: { Instance },
@@ -78,7 +79,7 @@ const function linkDependencies(
 		const dependency = cached or Installer.resolve(spec)
 		context.resolving[spec] = dependency
 
-		const dependencyRoot = if forceServer or dependency.realm == "server" then context.serverRoot else root
+		const dependencyRoot = if forceServer or dependency.realm == "server" then context.serverRoot() else root
 		const _, packageInstance = placePackage(context, dependency, dependencyRoot)
 		Linker.createThunk(entry, alias, packageInstance.Parent :: Instance, packageInstance)
 	end
@@ -122,8 +123,12 @@ end
 const function newContext(log: ((string) -> ())?): Context
 	const data = Config.read()
 	return {
-		sharedRoot = Config.resolvePath(data.shared, true) :: Instance,
-		serverRoot = Config.resolvePath(data.server, true) :: Instance,
+		sharedRoot = function()
+			return Config.resolvePath(data.shared, true) :: Instance
+		end,
+		serverRoot = function()
+			return Config.resolvePath(data.server, true) :: Instance
+		end,
 		log = log or Log.write,
 		created = {},
 		resolving = {},
@@ -147,7 +152,7 @@ end
 -- 패키지 하나를 의존성까지 설치. 별칭 반환
 function Installer.installPackage(package: Package, options: InstallOptions): string
 	const context = newContext(options.log)
-	const base = options.location or context.sharedRoot
+	const base = options.location or context.sharedRoot()
 	const alias = options.alias or Installer.defaultAlias(package)
 
 	const ok, err = pcall(function()
@@ -187,7 +192,7 @@ end
 --   그 외 (Folder 등): 설치 위치에 바로 복사
 function Installer.installSource(alias: string, source: Instance, options: InstallOptions)
 	const context = newContext(options.log)
-	const base = options.location or context.sharedRoot
+	const base = options.location or context.sharedRoot()
 
 	const ok, err = pcall(function()
 		if source:IsA("ModuleScript") then
@@ -320,7 +325,7 @@ end
 -- 가져온 것은 Config 모듈 아래에 보관하고 "이름 = script.이름" 으로 Config 에 적은 뒤 설치
 function Installer.importFiles(options: InstallOptions)
 	const context = newContext(options.log)
-	const base = options.location or context.sharedRoot
+	const base = options.location or context.sharedRoot()
 	const path = Config.pathOf(base)
 	const files = File.prompt()
 	if #files == 0 then
