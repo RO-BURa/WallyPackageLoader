@@ -38,6 +38,10 @@ path server <경로 | --selected>       server 경로 설정
 list                                  설치한 패키지 목록
 prune                                 안 쓰는 _Index 폴더 정리
 config                                Config 스크립트 열기
+login                                 GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
+login <토큰>                          직접 만든 GitHub 토큰 (GitHub 요청 한도만)
+logout / whoami                       로그아웃 / 로그인한 계정
+publish <scope/name@버전> [--server] [--deps] [--yes]   선택한 것을 Wally 에 업로드
 clear                                 로그 지우기
 license                               라이선스와 참고한 프로젝트 고지
 help [명령어]                         도움말 (help add 처럼 자세히)
@@ -46,6 +50,18 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 
 `add` 는 `wally add` 처럼 Config 에만 적습니다. 실제 설치는 `install` (Install All 버튼) 로 합니다.
 버전을 안 적으면 찾은 버전으로 고정해서 적습니다 (`cayasde/vide-opinionated` -> `cayasde/vide-opinionated@0.4.3`).
+
+### GitHub 로그인 / Wally 업로드 (명령어만)
+- 토큰은 `plugin:SetSetting` 으로 **이 컴퓨터에만** 저장되고 플레이스(Config 등)에는 들어가지 않습니다. `login <토큰>` 은 로그와 입력 기록에 남지 않습니다.
+- `login`: `wally login` 과 같은 GitHub 기기 로그인입니다 (Wally 의 GitHub OAuth 앱, `read:user` 권한).
+  나오는 주소(github.com/login/device)에서 코드를 입력하고 승인하면 됩니다.
+- `login <토큰>`: 직접 만든 토큰 (권한 없이 만들어도 됨). GitHub API 요청 한도만 늘어납니다 (시간당 60 -> 5000).
+  Wally 서버는 Wally 앱으로 받은 토큰만 받기 때문에 업로드는 `login` 으로 해야 합니다.
+- `publish`: Explorer 에서 선택한 것 (보통 패키지 ModuleScript) 을 Rojo 형식 파일 + `wally.toml` + `default.project.json` 으로 묶어 올립니다.
+  - ModuleScript / Script / LocalScript -> `.luau`, Folder -> 폴더, StringValue -> `.txt`, 그 외 -> `.rbxm`
+  - scope 는 GitHub 아이디 (또는 이미 가진 scope), 이름은 소문자
+  - `--deps`: Config 의 dependencies / serverDependencies 중 Wally 패키지를 의존성으로 넣음
+  - `--yes` 가 없으면 올릴 파일과 `wally.toml` 만 보여줍니다. **같은 버전은 다시 올릴 수 없고, 올린 것은 지울 수 없습니다.**
 
 ### 버튼
 | 버튼 | 동작 |
@@ -108,7 +124,7 @@ rojo build --plugin WallyPackageLoader.rbxm
 ```
 `--plugin` 은 Studio 의 로컬 플러그인 폴더에 바로 빌드합니다.
 
-처음 사용할 때 Studio 가 HTTP 요청(api.wally.run, api.github.com, codeload.github.com)과
+처음 사용할 때 Studio 가 HTTP 요청(api.wally.run, api.github.com, codeload.github.com, 로그인 시 github.com / raw.githubusercontent.com)과
 스크립트 삽입 권한을 물어봅니다.
 
 ## 구조
@@ -121,8 +137,10 @@ rojo build --plugin WallyPackageLoader.rbxm
 | `src/Builder.luau` | 파일 -> Instance (Rojo 규칙, `default.project.json`) |
 | `src/Config.luau` | `PackageLoaderConfig` ModuleScript 읽기/쓰기 |
 | `src/Http.luau` | HttpService 래퍼 |
+| `src/Auth.luau` | GitHub 로그인 (기기 로그인 / 토큰), 토큰 저장 |
+| `src/Publisher.luau` | Instance -> Wally 패키지 zip, 업로드 |
 | `src/Sources/` | Wally, GitHub, File, manifest(wally.toml / pesde.toml) |
-| `src/Util/` | Inflate(deflate/gzip), Zip, Semver, Toml, Lexer, TypeExports, ConfigEditor, RojoValues(Rojo 속성 값), Vfs |
+| `src/Util/` | Inflate(deflate/gzip), Zip(읽기/쓰기), Semver, Toml, Lexer, TypeExports, ConfigEditor, RojoValues(Rojo 속성 값), Vfs |
 
 ## 아직 안 되는 것
 - pesde 레지스트리 패키지 (`name = "scope/name"` 형식 의존성), GitHub 외 Git 저장소

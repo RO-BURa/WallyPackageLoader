@@ -3,6 +3,7 @@
 --   gh:owner/repo@^1.2      범위를 만족하는 가장 높은 태그 (v1.2.3 / 1.2.3)
 --   gh:owner/repo#main      브랜치, 태그, 커밋
 
+const Auth = require(script.Parent.Parent.Auth)
 const Http = require(script.Parent.Parent.Http)
 const Semver = require(script.Parent.Parent.Util.Semver)
 const Vfs = require(script.Parent.Parent.Util.Vfs)
@@ -26,7 +27,7 @@ const function listTags(owner: string, repo: string): { string }
 	const names = {}
 	-- 태그가 많은 저장소를 위해 최대 3 페이지
 	for page = 1, 3 do
-		const tags = Http.getJson(`{API}/repos/{owner}/{repo}/tags?per_page=100&page={page}`)
+		const tags = Http.getJson(`{API}/repos/{owner}/{repo}/tags?per_page=100&page={page}`, Auth.githubHeaders())
 		for _, tag in tags do
 			table.insert(names, tag.name)
 		end
@@ -62,7 +63,7 @@ function GitHub.resolve(owner: string, repo: string, rangeText: string?, ref: st
 		elseif rangeText then
 			error(`GitHub: {owner}/{repo}@{rangeText} 를 만족하는 태그가 없음`, 0)
 		else
-			const info = Http.getJson(`{API}/repos/{owner}/{repo}`)
+			const info = Http.getJson(`{API}/repos/{owner}/{repo}`, Auth.githubHeaders())
 			version = sanitize(info.default_branch)
 			downloadRef = `refs/heads/{info.default_branch}`
 		end

@@ -4,7 +4,9 @@ const Selection = game:GetService("Selection")
 
 const Config = require(script.Parent.Config)
 const Fmt = require(script.Parent.Fmt)
+const Auth = require(script.Parent.Auth)
 const Installer = require(script.Parent.Installer)
+const Publisher = require(script.Parent.Publisher)
 const LicenseText = require(script.Parent.LicenseText)
 const Linker = require(script.Parent.Linker)
 
@@ -21,6 +23,9 @@ export type Flags = {
 	server: boolean,
 	selected: boolean,
 	to: string?,
+	-- publish 용
+	deps: boolean?,
+	yes: boolean?,
 }
 
 const Commands = {}
@@ -33,7 +38,23 @@ type HelpEntry = {
 	examples: { string }?,
 }
 
-const COMMAND_ORDER = { "add", "remove", "install", "import", "path", "list", "prune", "config", "clear", "license", "help" }
+const COMMAND_ORDER = {
+	"add",
+	"remove",
+	"install",
+	"import",
+	"path",
+	"list",
+	"prune",
+	"config",
+	"login",
+	"logout",
+	"whoami",
+	"publish",
+	"clear",
+	"license",
+	"help",
+}
 
 const LOCATION_OPTIONS = {
 	{ "--server", "server 경로에" },
@@ -99,6 +120,35 @@ const HELP: { [string]: HelpEntry } = {
 	clear = {
 		summary = "로그 지우기",
 		usage = { "clear" },
+	},
+	login = {
+		summary = "GitHub 로그인 (토큰은 이 컴퓨터에만 저장)",
+		usage = { "login", "login <토큰>" },
+		args = {
+			{ "(없음)", "기기 로그인: 나오는 주소에서 코드를 입력하고 승인. Wally 업로드 + GitHub 요청 한도 증가" },
+			{ "<토큰>", "직접 만든 GitHub 토큰 (권한 없이 만들어도 됨). GitHub 요청 한도만 늘어나고 Wally 업로드는 안 됨" },
+		},
+	},
+	logout = {
+		summary = "GitHub 로그아웃 (저장된 토큰 삭제)",
+		usage = { "logout" },
+	},
+	whoami = {
+		summary = "로그인한 GitHub 계정",
+		usage = { "whoami" },
+	},
+	publish = {
+		summary = "Explorer 에서 선택한 것을 Wally 에 업로드 (login 필요)",
+		usage = { "publish <scope/name@버전> [옵션]" },
+		args = {
+			{ "<scope/name@버전>", "scope 는 GitHub 아이디 (또는 이미 가진 scope), 소문자" },
+		},
+		options = {
+			{ "--server", "server realm 패키지로" },
+			{ "--deps", "Config 의 dependencies / serverDependencies 를 의존성으로 넣음 (Wally 패키지만)" },
+			{ "--yes", "실제로 업로드. 없으면 올릴 내용만 보여줌. 같은 버전은 다시 못 올리고 올린 건 못 지움" },
+		},
+		examples = { "publish ro-bura/signal@1.0.0", "publish ro-bura/signal@1.0.0 --deps --yes" },
 	},
 	license = {
 		summary = "라이선스와 참고한 프로젝트 고지",
@@ -198,6 +248,10 @@ const function takeFlags(words: { string }): ({ string }, Flags)
 			flags.server = true
 		elseif word == "--selected" then
 			flags.selected = true
+		elseif word == "--deps" then
+			flags.deps = true
+		elseif word == "--yes" then
+			flags.yes = true
 		elseif word == "--to" then
 			flags.to = words[i + 1]
 			if not flags.to then
@@ -393,6 +447,58 @@ function Commands.openConfig(context: Context)
 	context.plugin:OpenScript(Config.getModule())
 end
 
+function Commands.login(token: string?, context: Context)
+	if token then
+		Auth.setToken(token, "token")
+		const ok, user = pcall(Auth.whoami)
+		if not ok then
+			Auth.clear()
+			error(`토큰이 맞지 않음: {user}`, 0)
+		end
+		context.log(`완료: {user} 로 로그인 (토큰, GitHub 요청 한도만 늘어남)`)
+		return
+	end
+	Auth.deviceLogin(context.log)
+	context.log(`완료: {Auth.whoami()} 로 로그인 (기기 로그인)`)
+end
+
+function Commands.publish(spec: string?, flags: Flags, context: Context)
+	if not spec then
+		error("publish <scope/name@버전> (help publish)", 0)
+	end
+	const source = selected()
+	if not source then
+		error("Explorer 에서 올릴 것을 선택해주세요 (보통 패키지 ModuleScript)", 0)
+	end
+
+	const prepared = Publisher.prepare(source, {
+		spec = spec,
+		server = flags.server,
+		withConfigDependencies = flags.deps == true,
+		log = context.log,
+	})
+
+	section(context, "FILES")
+	for _, path in prepared.paths do
+		context.rich(INDENT .. Fmt.escape(path) .. "  " .. Fmt.color("dim", `({#prepared.files[path]} bytes)`))
+	end
+	section(context, "wally.toml")
+	for _, line in string.split(prepared.manifest, "\n") do
+		if line ~= "" then
+			context.rich(INDENT .. Fmt.escape(line))
+		end
+	end
+	context.rich("")
+
+	if not flags.yes then
+		context.log(`경고: 아직 안 올림. 같은 버전은 다시 못 올리고 올린 건 못 지우니 확인 후 --yes 를 붙여주세요`)
+		return
+	end
+	context.log(`확인 중: {prepared.name}@{prepared.version} 업로드`)
+	Publisher.upload(prepared)
+	context.log(`완료: {prepared.name}@{prepared.version} 업로드`)
+end
+
 -- 한 줄 실행. 첫 단어가 명령어가 아니면 add 로 처리
 function Commands.run(line: string, context: Context)
 	const text = trim(line)
@@ -433,6 +539,15 @@ function Commands.run(line: string, context: Context)
 		Commands.openConfig(context)
 	elseif command == "clear" then
 		context.clear()
+	elseif command == "login" then
+		Commands.login(args[1], context)
+	elseif command == "logout" then
+		Auth.clear()
+		context.log("완료: 로그아웃 (저장된 토큰 삭제)")
+	elseif command == "whoami" then
+		context.log(`로그인: {Auth.whoami()} ({if Auth.kind() == "device" then "기기 로그인" else "토큰"})`)
+	elseif command == "publish" then
+		Commands.publish(args[1], flags, context)
 	elseif command == "license" then
 		context.rich(Fmt.escape(LicenseText.text()))
 	elseif command == "help" or command == "?" then

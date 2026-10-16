@@ -6,9 +6,10 @@ const Http = {}
 
 const cache: { [string]: string } = {}
 
-function Http.get(url: string, headers: { [string]: string }?): string
+-- fresh: 캐시를 쓰지 않음
+function Http.get(url: string, headers: { [string]: string }?, fresh: boolean?): string
 	const cached = cache[url]
-	if cached then
+	if cached and not fresh then
 		return cached
 	end
 
@@ -28,8 +29,33 @@ function Http.get(url: string, headers: { [string]: string }?): string
 	return response.Body
 end
 
-function Http.getJson(url: string, headers: { [string]: string }?): any
-	return HttpService:JSONDecode(Http.get(url, headers))
+function Http.getJson(url: string, headers: { [string]: string }?, fresh: boolean?): any
+	return HttpService:JSONDecode(Http.get(url, headers, fresh))
+end
+
+-- POST (캐시 안 함). 실패해도 응답 본문을 같이 보여줌
+function Http.post(url: string, body: string, headers: { [string]: string }?): string
+	const ok, response = pcall(HttpService.RequestAsync, HttpService, {
+		Url = url,
+		Method = "POST",
+		Headers = headers,
+		Body = body,
+	})
+	if not ok then
+		error(`HTTP 요청 실패: {url}\n{response}`, 0)
+	end
+	if not response.Success then
+		const detail = if response.Body and response.Body ~= "" then `\n{string.sub(response.Body, 1, 500)}` else ""
+		error(`HTTP {response.StatusCode} {response.StatusMessage}: {url}{detail}`, 0)
+	end
+	return response.Body
+end
+
+function Http.postJson(url: string, body: any, headers: { [string]: string }?): any
+	const merged = table.clone(headers or {})
+	merged["Content-Type"] = "application/json"
+	merged["Accept"] = "application/json"
+	return HttpService:JSONDecode(Http.post(url, HttpService:JSONEncode(body), merged))
 end
 
 function Http.clearCache()
