@@ -1,5 +1,7 @@
 -- 스펙 해석 -> 의존성 재귀 설치 -> thunk 연결 -> Config 저장
 
+const HttpService = game:GetService("HttpService")
+
 const Builder = require(script.Parent.Builder)
 const Config = require(script.Parent.Config)
 const Linker = require(script.Parent.Linker)
@@ -164,6 +166,69 @@ function Installer.install(spec: string, options: InstallOptions): string
 	return Installer.installPackage(Installer.resolve(spec), options)
 end
 
+-- Import 한 패키지의 의존성 (wally.toml 에서 읽은 것) 을 보관하는 Attribute
+const DEPENDENCIES_ATTRIBUTE = "PackageLoaderDependencies"
+
+const function storedDependencies(source: Instance): ({ [string]: string }, { [string]: string })
+	const raw = source:GetAttribute(DEPENDENCIES_ATTRIBUTE)
+	if type(raw) ~= "string" then
+		return {}, {}
+	end
+	const ok, decoded = pcall(HttpService.JSONDecode, HttpService, raw)
+	if not ok or type(decoded) ~= "table" then
+		return {}, {}
+	end
+	return decoded.dependencies or {}, decoded.serverDependencies or {}
+end
+
+-- Config 에 Instance 로 적힌 패키지 설치 (원본은 그대로 두고 복사)
+--   ModuleScript: _Index/custom_별칭 에 복사 + thunk (의존성도 설치)
+--   그 외 (Folder 등): 설치 위치에 바로 복사
+function Installer.installSource(alias: string, source: Instance, options: InstallOptions)
+	const context = newContext(options.log)
+	const base = options.location or context.sharedRoot
+
+	const ok, err = pcall(function()
+		if source:IsA("ModuleScript") then
+			const index = Linker.getIndex(base)
+			const entryName = `custom_{alias}`
+			const existing = index:FindFirstChild(entryName)
+			if existing then
+				existing:Destroy()
+			end
+			const entry = Instance.new("Folder")
+			entry.Name = entryName
+			entry:SetAttribute(Linker.ENTRY_ATTRIBUTE, true)
+			entry.Parent = index
+			table.insert(context.created, entry)
+
+			const copy = source:Clone()
+			copy:SetAttribute(DEPENDENCIES_ATTRIBUTE, nil)
+			copy.Parent = entry
+
+			const dependencies, serverDependencies = storedDependencies(source)
+			linkDependencies(context, entry, base, dependencies, false)
+			linkDependencies(context, entry, base, serverDependencies, true)
+			Linker.createThunk(base, alias, entry, copy)
+		else
+			const existing = base:FindFirstChild(alias)
+			if existing then
+				existing:Destroy()
+			end
+			const copy = source:Clone()
+			copy.Name = alias
+			copy:SetAttribute(DEPENDENCIES_ATTRIBUTE, nil)
+			copy:SetAttribute(Linker.COPY_ATTRIBUTE, true)
+			copy.Parent = base
+		end
+	end)
+	if not ok then
+		rollback(context)
+		error(err, 0)
+	end
+	context.log(`완료: {alias} -> {source.Name} ({Config.pathOf(base)})`)
+end
+
 -- 버전을 안 적었으면 찾은 버전으로 고정 (wally add 처럼)
 --   cayasde/vide-opinionated -> cayasde/vide-opinionated@0.4.3
 const function pinVersion(spec: string, package: Package): string
@@ -196,69 +261,116 @@ function Installer.add(spec: string, alias: string?, path: string, log: ((string
 	return finalAlias, pinned
 end
 
--- Config 에 적힌 의존성 전체 설치 (wally install 과 비슷)
+-- Config 대로 맞춤 (wally install 과 비슷)
+--   1. 설치 위치에서 Config 에 없는 것 (플러그인이 만든 thunk / 복사본만) 삭제
+--   2. Config 에 적힌 것 전부 설치
+--   3. 안 쓰는 _Index 정리
 function Installer.installAll(log: ((string) -> ())?)
 	const logger = log or Log.write
+	const data = Config.read()
 	const entries = Config.entries()
+
+	const expected: { [string]: { [string]: boolean } } = {
+		[data.shared] = {},
+		[data.server] = {},
+	}
+	for _, entry in entries do
+		expected[entry.location] = expected[entry.location] or {}
+		expected[entry.location][entry.alias] = true
+	end
+	for location, aliases in expected do
+		const folder = Config.resolvePath(location, false)
+		if folder then
+			for _, child in folder:GetChildren() do
+				const name = child.Name
+				if Linker.isManaged(child) and not aliases[name] then
+					child:Destroy()
+					logger(`삭제됨: {name} ({location})`)
+				end
+			end
+		end
+	end
+
 	if #entries == 0 then
 		logger("Config 에 적힌 패키지가 없음")
-		return
 	end
 	for _, entry in entries do
 		const ok, err = pcall(function()
-			Installer.install(entry.spec, {
+			const options = {
 				alias = entry.alias,
 				location = Config.resolvePath(entry.location, true),
 				log = logger,
-			})
+			}
+			if entry.source then
+				Installer.installSource(entry.alias, entry.source, options)
+			else
+				Installer.install(entry.spec :: string, options)
+			end
 		end)
 		if not ok then
-			logger(`실패: {entry.alias} ({entry.spec}) - {err}`)
+			logger(`실패: {entry.alias} - {err}`)
 		end
 	end
+
+	Installer.prune(logger)
 end
 
 -- 파일에서 가져오기 (여러 개 선택 가능)
+-- 가져온 것은 Config 모듈 아래에 보관하고 "이름 = script.이름" 으로 Config 에 적은 뒤 설치
 function Installer.importFiles(options: InstallOptions)
 	const context = newContext(options.log)
 	const base = options.location or context.sharedRoot
+	const path = Config.pathOf(base)
 	const files = File.prompt()
 	if #files == 0 then
 		context.log("선택한 파일이 없음")
 		return
 	end
 
+	const storage = Config.storage()
 	for _, file in files do
 		const ok, err = pcall(function()
 			const imported = File.read(file)
+			local stored: Instance
+			local defaultAlias: string
 			if imported.kind == "script" then
-				const existing = base:FindFirstChild(imported.name)
-				if existing then
-					existing:Destroy()
-				end
 				const module = Instance.new("ModuleScript")
 				module.Name = imported.name
 				;(module :: any).Source = imported.source
-				module.Parent = base
-				context.log(`가져옴: {imported.name} ({Config.pathOf(base)})`)
+				stored = module
+				defaultAlias = imported.name
 			elseif imported.kind == "package" then
-				Installer.installPackage(imported.package, {
-					alias = options.alias,
-					location = base,
-					log = context.log,
-				})
-			else
-				const instance = Builder.buildPackage(imported.vfs, imported.name)
-				if not instance then
+				const package = imported.package
+				const built = Builder.buildPackage(package.fetch(), package.name, package.entryPath)
+				if not built then
 					error("가져올 내용이 없음", 0)
 				end
-				const existing = base:FindFirstChild(imported.name)
-				if existing then
-					existing:Destroy()
+				built:SetAttribute(DEPENDENCIES_ATTRIBUTE, HttpService:JSONEncode({
+					dependencies = package.dependencies,
+					serverDependencies = package.serverDependencies,
+				}))
+				stored = built
+				defaultAlias = Installer.defaultAlias(package)
+			else
+				const built = Builder.buildPackage(imported.vfs, imported.name)
+				if not built then
+					error("가져올 내용이 없음", 0)
 				end
-				instance.Parent = base
-				context.log(`가져옴: {imported.name} ({Config.pathOf(base)})`)
+				stored = built
+				defaultAlias = imported.name
 			end
+
+			const alias = options.alias or defaultAlias
+			stored.Name = alias
+			const existing = storage:FindFirstChild(alias)
+			if existing then
+				existing:Destroy()
+			end
+			stored.Parent = storage
+
+			Config.addDependency(alias, stored, path)
+			context.log(`가져옴: {alias} = {Config.childExpression(stored)} ({path})`)
+			Installer.installSource(alias, stored, { location = base, log = context.log })
 		end)
 		if not ok then
 			context.log(`실패: {file.Name} - {err}`)
@@ -287,12 +399,23 @@ function Installer.remove(alias: string, location: string?, log: ((string) -> ()
 	end
 	const path = resolved :: string
 
+	-- Import 해서 Config 아래에 보관한 원본이면 같이 지움
+	local stored: Instance? = nil
+	for _, entry in Config.entries() do
+		if entry.alias == alias and entry.location == path and entry.source then
+			stored = entry.source
+		end
+	end
+
 	const folder = Config.resolvePath(path, false)
 	const thunk = folder and folder:FindFirstChild(alias)
-	if thunk and thunk:GetAttribute(Linker.LINK_ATTRIBUTE) then
+	if thunk and Linker.isManaged(thunk) then
 		thunk:Destroy()
 	end
 	Config.removeDependency(alias, path)
+	if stored and stored:IsDescendantOf(Config.storage()) then
+		stored:Destroy()
+	end
 	Installer.prune(logger)
 	logger(`삭제됨: {alias} ({path})`)
 end

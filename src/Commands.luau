@@ -71,11 +71,11 @@ const HELP: { [string]: HelpEntry } = {
 		examples = { "remove asdf", "rm ro-bura/signal" },
 	},
 	install = {
-		summary = "Config 에 적힌 패키지 전체 설치 (wally install)",
+		summary = "Config 대로 설치 (없는 건 지우고 적힌 건 설치, wally install)",
 		usage = { "install" },
 	},
 	import = {
-		summary = "파일에서 가져오기 (.lua / .luau 여러 개, .zip)",
+		summary = "파일에서 가져오기 (.lua / .luau 여러 개, .zip). Config 아래에 보관하고 이름 = script.이름 으로 추가",
 		usage = { "import [옵션]" },
 		options = LOCATION_OPTIONS,
 	},
@@ -176,7 +176,7 @@ function Commands.findEntries(query: string): { Config.Entry }
 		if alias then
 			matched = entry.alias == alias
 		elseif string.find(spec, "/", 1, true) then
-			matched = packageId(entry.spec) == packageId(spec)
+			matched = entry.spec ~= nil and packageId(entry.spec) == packageId(spec)
 		else
 			matched = string.lower(entry.alias) == string.lower(spec)
 		end
@@ -266,7 +266,7 @@ end
 function Commands.remove(text: string, context: Context)
 	if trim(text) == "" then
 		const target = selected()
-		if target and target:GetAttribute(Linker.LINK_ATTRIBUTE) and target.Parent then
+		if target and Linker.isManaged(target) and target.Parent then
 			Installer.remove(target.Name, Config.pathOf(target.Parent), context.log)
 			return
 		end
@@ -321,10 +321,17 @@ function Commands.list(context: Context)
 	for _, entry in entries do
 		const folder = Config.resolvePath(entry.location, false)
 		const installed = folder and folder:FindFirstChild(entry.alias)
+		local valueText: string
+		if entry.source then
+			const ok, expression = pcall(Config.childExpression, entry.source)
+			valueText = if ok then expression else entry.source:GetFullName()
+		else
+			valueText = entry.spec :: string
+		end
 		context.rich(
 			Fmt.color("green", Fmt.bold(Fmt.escape(entry.alias)))
 				.. " = "
-				.. Fmt.escape(entry.spec)
+				.. Fmt.escape(valueText)
 				.. "  "
 				.. Fmt.color("dim", `({Fmt.escape(entry.location)})`)
 				.. (if installed then "" else "  " .. Fmt.color("yellow", "[설치 안 됨]"))

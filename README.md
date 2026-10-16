@@ -9,7 +9,8 @@ Wally 와 같은 `_Index` 구조로 설치합니다.
 - **GitHub**: `gh:owner/repo@^1.0` (semver 태그), `gh:owner/repo#main` (브랜치/태그/커밋)
   - `wally.toml` 또는 `pesde.toml` 의 의존성도 같이 설치
   - pesde 는 중앙 레지스트리를 없애고 Git 태그 기반으로 바뀌는 중이라 ([RFC #59](https://github.com/pesde-pkg/pesde/issues/59)) GitHub 소스를 지원
-- **파일에서 가져오기**: `.lua` / `.luau` (여러 개 한 번에 선택 가능), `.zip` (wally.toml 이 있으면 패키지로, 없으면 폴더로)
+- **파일에서 가져오기**: `.lua` / `.luau` (여러 개 한 번에 선택 가능), `.zip` (wally.toml 이 있으면 의존성도 설치)
+  - 가져온 것은 `PackageLoaderConfig` 아래에 보관하고 Config 에 `이름 = script.이름` 으로 적은 뒤 설치
   - 일반 폴더는 Studio API 에 폴더 선택 기능이 없어서 zip 으로 압축해서 가져와야 함
 - **타입 re-export**: thunk 모듈이 패키지의 `export type` 을 다시 export 해서
   `Packages.Signal.Signal<T>` 같은 타입을 바로 사용 가능 (pesde 링커와 같은 방식, `const` 가 있는 소스도 처리)
@@ -30,7 +31,7 @@ add <패키지> --server                 server 경로에 추가
 add <패키지> --selected               Explorer 에서 선택한 폴더에 추가
 add <패키지> --to ServerStorage/Libs  지정한 경로에 추가
 remove asdf  /  remove ro-bura/signal 별칭이나 패키지 이름으로 삭제 (rm 도 됨)
-install                               Config 에 적힌 패키지 전체 설치 (add 한 뒤 실행)
+install                               Config 대로 설치 (Config 에 없는 건 지우고 적힌 건 설치)
 import [--server | --selected | --to <경로>]   파일에서 가져오기
 path shared <경로 | --selected>       shared 경로 설정
 path server <경로 | --selected>       server 경로 설정
@@ -51,9 +52,9 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 |---|---|
 | Add / Add to Server / Add to Selected | 입력한 패키지를 Config 의 shared / server / 선택한 폴더 목록에 추가 (설치는 Install All) |
 | Remove | 입력한 별칭이나 패키지 삭제, 입력이 비어 있으면 Explorer 에서 선택한 패키지 삭제 |
-| Install All | Config 에 적힌 패키지 전체 설치 (`wally install` 과 비슷) |
+| Install All | Config 대로 설치. Config 에 없는 것 (플러그인이 만든 것만) 은 지움 (`wally install` 과 비슷) |
 | Prune | 안 쓰는 `_Index` 폴더 정리. Remove 할 때 자동으로 하므로 thunk 를 손으로 지웠을 때만 필요 |
-| Import File | 파일 선택 창. Explorer 에서 선택한 곳, 없으면 shared 경로에 가져옴 |
+| Import File | 파일 선택 창. Config 아래에 보관하고 Config 에 추가한 뒤, Explorer 에서 선택한 곳(없으면 shared 경로)에 설치 |
 | Open Config | Config 스크립트 열기 |
 | Set Shared Path / Set Server Path | Explorer 에서 선택한 폴더(없으면 입력한 경로)로 설정 |
 | List / Help | 설치한 패키지 목록 / 명령어 도움말 |
@@ -67,6 +68,7 @@ return {
 
 	dependencies = {
 		Signal = "sleitnick/signal@^2",
+		MyLib = script.MyLib,           -- 직접 가져온 것 (Import File)
 	},
 	serverDependencies = {},
 	custom = {
@@ -76,6 +78,12 @@ return {
 	},
 }
 ```
+- `shared` / `server` 는 경로 문자열(`"ReplicatedStorage/Packages"`, `"game/ReplicatedStorage/Packages"`) 이나
+  Instance (`game.ReplicatedStorage.Packages`) 둘 다 됩니다.
+- 값은 스펙 문자열 대신 Instance 도 됩니다 (`MyLib = script.MyLib`). 설치할 때 복사하므로 원본은 Config 아래에 그대로 남습니다.
+  ModuleScript 면 `_Index/custom_별칭` 에 복사하고 thunk 를 만들고, 그 외 (Folder 등) 는 설치 위치에 바로 복사합니다.
+- `install` 은 설치 위치에서 Config 에 없는 것 중 플러그인이 만든 것 (thunk / 복사본) 만 지웁니다. 직접 넣은 것은 건드리지 않습니다.
+
 처음 만들 때 맨 아래에 쓸 수 있는 항목 설명이 주석으로 들어갑니다.
 Add / Remove / 경로 설정은 필요한 줄만 고치기 때문에 직접 단 주석과 순서가 그대로 남습니다.
 테이블을 코드로 만드는 등 구조를 알아볼 수 없으면 아무것도 바꾸지 않고 오류를 보여줍니다.

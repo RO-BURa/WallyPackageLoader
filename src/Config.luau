@@ -7,18 +7,23 @@ const ServerStorage = game:GetService("ServerStorage")
 const ConfigEditor = require(script.Parent.Util.ConfigEditor)
 const LicenseText = require(script.Parent.LicenseText)
 
+-- 스펙 문자열 ("scope/name@1.0.0") 또는 직접 가져온 Instance (script["MyLib"])
+export type Source = string | Instance
+
 export type Data = {
 	shared: string,
 	server: string,
-	dependencies: { [string]: string },
-	serverDependencies: { [string]: string },
-	-- 경로 -> { 별칭 -> 스펙 }
-	custom: { [string]: { [string]: string } },
+	dependencies: { [string]: Source },
+	serverDependencies: { [string]: Source },
+	-- 경로 -> { 별칭 -> 스펙 / Instance }
+	custom: { [string]: { [string]: Source } },
 }
 
 export type Entry = {
 	alias: string,
-	spec: string,
+	-- 스펙이면 spec, Instance 면 source
+	spec: string?,
+	source: Instance?,
 	location: string,
 }
 
@@ -38,9 +43,16 @@ const DOCS = [==[
 
 	shared             Folder for shared packages        e.g. "ReplicatedStorage/Packages"
 	server             Folder for server packages        e.g. "ServerScriptService/ServerPackages"
+	shared / server can also be an Instance: game.ReplicatedStorage.Packages
+	Paths may start with "game/" (game/ReplicatedStorage/Packages)
+
 	dependencies       Alias = spec, installed to `shared`
 	serverDependencies Alias = spec, installed to `server`
 	custom             ["Service/Folder"] = { Alias = spec }, installed to that folder
+
+	Instead of a spec, a value can be an Instance you put yourself:
+		MyLib = script.MyLib       (Import File stores files under this module like this)
+	It is copied on install, so the original stays here.
 
 	Spec formats
 		"sleitnick/signal@^2"       Wally package (^, ~, =, >=, <, *, "1.2.3" = ^1.2.3)
@@ -50,6 +62,7 @@ const DOCS = [==[
 		"gh:owner/repo"             GitHub, latest semver tag or default branch
 
 	Add only writes here; press "Install All" (or run `install`) to install.
+	Install also removes packages (made by the plugin) that are no longer listed here.
 	Add / Remove only edit the lines they need, so your comments are kept.
 	If the file can no longer be understood (e.g. the table is built with code),
 	Add / Remove fail and nothing is changed.
@@ -175,46 +188,98 @@ function Config.getModule(): ModuleScript
 	return module
 end
 
--- 매번 복제해서 require (require 캐시 때문에 수정한 내용이 안 보이는 것 방지)
+-- original 의 자식 구조를 이름만 같은 Folder 로 흉내 냄 (script["이름"] 이 동작하도록)
+const function mirrorChildren(original: Instance, target: Instance)
+	for _, child in original:GetChildren() do
+		const placeholder = Instance.new("Folder")
+		placeholder.Name = child.Name
+		mirrorChildren(child, placeholder)
+		placeholder.Parent = target
+	end
+end
+
+-- 흉내 낸 트리 안의 Instance 를 원본 Config 안의 같은 위치로
+const function mapBack(value: Instance, mirror: Instance, original: Instance): Instance
+	const names = {}
+	local current: Instance? = value
+	while current and current ~= mirror do
+		table.insert(names, 1, current.Name)
+		current = current.Parent
+	end
+	local target: Instance? = original
+	for _, name in names do
+		target = target and target:FindFirstChild(name)
+	end
+	if not target then
+		error(`{CONFIG_NAME} 안에서 {table.concat(names, ".")} 을 찾을 수 없음`, 0)
+	end
+	return target
+end
+
+-- require 캐시 때문에 매번 새 ModuleScript 로 require
+-- 자식은 이름만 같은 Folder 로 흉내 내고, 나온 Instance 는 원본 위치로 바꿈
 function Config.read(): Data
-	const clone = Config.getModule():Clone()
-	const ok, result = pcall(require, clone)
-	clone:Destroy()
+	const original = Config.getModule()
+	const temp = Instance.new("ModuleScript")
+	temp.Name = original.Name
+	;(temp :: any).Source = (original :: any).Source
+	mirrorChildren(original, temp)
+
+	const ok, result = pcall(require, temp)
 	if not ok then
+		temp:Destroy()
 		error(`{CONFIG_NAME} 를 읽을 수 없음: {result}`, 0)
 	end
 	if type(result) ~= "table" then
+		temp:Destroy()
 		error(`{CONFIG_NAME} 는 테이블을 return 해야 함`, 0)
 	end
 
+	const function source(value: any): Source?
+		if type(value) == "string" then
+			return value
+		elseif typeof(value) == "Instance" then
+			if value == temp or value:IsDescendantOf(temp) then
+				return mapBack(value, temp, original)
+			end
+			return value
+		end
+		return nil
+	end
+	-- 경로: 문자열 또는 Instance
+	const function path(value: any, default: string): string
+		const resolved = source(value)
+		if typeof(resolved) == "Instance" then
+			return Config.pathOf(resolved :: Instance)
+		end
+		return Config.normalizePath((resolved :: string?) or default)
+	end
+	const function readMap(map: any): { [string]: Source }
+		const out = {}
+		if type(map) == "table" then
+			for alias, value in map do
+				const resolved = if type(alias) == "string" then source(value) else nil
+				if resolved then
+					out[alias] = resolved
+				end
+			end
+		end
+		return out
+	end
+
 	const data = defaultData()
-	if type(result.shared) == "string" then
-		data.shared = result.shared
-	end
-	if type(result.server) == "string" then
-		data.server = result.server
-	end
-	for _, field in { "dependencies", "serverDependencies" } do
-		if type(result[field]) == "table" then
-			for alias, spec in result[field] do
-				if type(alias) == "string" and type(spec) == "string" then
-					(data :: any)[field][alias] = spec
-				end
-			end
-		end
-	end
+	data.shared = path(result.shared, DEFAULT_SHARED)
+	data.server = path(result.server, DEFAULT_SERVER)
+	data.dependencies = readMap(result.dependencies)
+	data.serverDependencies = readMap(result.serverDependencies)
 	if type(result.custom) == "table" then
-		for path, map in result.custom do
-			if type(path) == "string" and type(map) == "table" then
-				data.custom[path] = {}
-				for alias, spec in map do
-					if type(alias) == "string" and type(spec) == "string" then
-						data.custom[path][alias] = spec
-					end
-				end
+		for customPath, map in result.custom do
+			if type(customPath) == "string" and type(map) == "table" then
+				data.custom[Config.normalizePath(customPath)] = readMap(map)
 			end
 		end
 	end
+	temp:Destroy()
 	return data
 end
 
@@ -270,23 +335,51 @@ const function sectionFor(data: Data, location: string): { string }
 	return { "custom", location }
 end
 
-const function mapFor(data: Data, section: { string }): { [string]: string }?
+const function mapFor(data: Data, section: { string }): { [string]: Source }?
 	if section[1] == "custom" then
 		return data.custom[section[2]]
 	end
 	return (data :: any)[section[1]]
 end
 
--- 이미 같은 별칭이 있었으면 이전 스펙 반환
-function Config.addDependency(alias: string, spec: string, location: string): string?
+-- Config 안의 자식을 가리키는 식: script.MyLib / script["my-lib"]
+function Config.childExpression(instance: Instance): string
+	const module = Config.getModule()
+	const names = {}
+	local current: Instance? = instance
+	while current and current ~= module do
+		table.insert(names, 1, current.Name)
+		current = current.Parent
+	end
+	if current ~= module then
+		error(`{instance:GetFullName()} 은(는) {CONFIG_NAME} 안에 있지 않음`, 0)
+	end
+	local expression = "script"
+	for _, name in names do
+		expression ..= if string.match(name, "^[%a_][%w_]*$") then `.{name}` else `[{string.format("%q", name)}]`
+	end
+	return expression
+end
+
+-- 이미 같은 별칭이 있었으면 이전 값 반환
+-- value: 스펙 문자열, 또는 Config 안의 Instance
+function Config.addDependency(alias: string, value: Source, location: string): Source?
 	const data = Config.read()
 	const section = sectionFor(data, location)
 	const map = mapFor(data, section)
 	const previous = map and map[alias]
+	const valueText = if typeof(value) == "Instance"
+		then Config.childExpression(value :: Instance)
+		else string.format("%q", value :: string)
 	edit(function(source)
-		return ConfigEditor.set(source, section, alias, string.format("%q", spec))
+		return ConfigEditor.set(source, section, alias, valueText)
 	end)
 	return previous
+end
+
+-- Config 모듈 (Import 한 것을 보관하는 곳)
+function Config.storage(): Instance
+	return Config.getModule()
 end
 
 function Config.removeDependency(alias: string, location: string)
@@ -310,9 +403,14 @@ end
 function Config.entries(): { Entry }
 	const data = Config.read()
 	const result = {}
-	const function add(map: { [string]: string }, location: string)
+	const function add(map: { [string]: Source }, location: string)
 		for _, alias in sortedKeys(map) do
-			table.insert(result, { alias = alias, spec = map[alias], location = location })
+			const value = map[alias]
+			if typeof(value) == "Instance" then
+				table.insert(result, { alias = alias, source = value :: Instance, location = location })
+			else
+				table.insert(result, { alias = alias, spec = value :: string, location = location })
+			end
 		end
 	end
 	add(data.dependencies, data.shared)
@@ -323,9 +421,20 @@ function Config.entries(): { Entry }
 	return result
 end
 
+-- "game/ReplicatedStorage/Packages", "game.ReplicatedStorage.Packages" -> "ReplicatedStorage/Packages"
+function Config.normalizePath(path: string): string
+	local result = string.gsub(path, "^%s*(.-)%s*$", "%1")
+	if string.match(result, "^game%.") and not string.find(result, "/", 1, true) then
+		result = string.gsub(result, "%.", "/")
+	end
+	result = string.gsub(result, "^game/", "")
+	result = string.gsub(result, "/+$", "")
+	return result
+end
+
 -- "ReplicatedStorage/Packages" 같은 경로를 Instance 로 (없는 폴더는 create 일 때 만듦)
 function Config.resolvePath(path: string, create: boolean?): Instance?
-	const parts = string.split(path, "/")
+	const parts = string.split(Config.normalizePath(path), "/")
 	const ok, service = pcall(game.GetService, game, parts[1])
 	if not ok or not service then
 		error(`알 수 없는 서비스: {parts[1]}`, 0)
