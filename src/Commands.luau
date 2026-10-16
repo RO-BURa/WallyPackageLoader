@@ -26,6 +26,8 @@ export type Flags = {
 	-- publish 용
 	deps: boolean?,
 	yes: boolean?,
+	-- login 용 (주의 사항, privacy, terms 에 동의)
+	agree: boolean?,
 }
 
 const Commands = {}
@@ -125,10 +127,13 @@ const HELP: { [string]: HelpEntry } = {
 	},
 	login = {
 		summary = "GitHub 로그인 (토큰은 이 컴퓨터에만 저장)",
-		usage = { "login", "login <토큰>" },
+		usage = { "login --agree", "login <토큰> --agree" },
 		args = {
 			{ "(없음)", "기기 로그인: 나오는 주소에서 코드를 입력하고 승인. Wally 업로드 + GitHub 요청 한도 증가" },
 			{ "<토큰>", "직접 만든 GitHub 토큰 (권한 없이 만들어도 됨). GitHub 요청 한도만 늘어나고 Wally 업로드는 안 됨" },
+		},
+		options = {
+			{ "--agree", "주의 사항과 privacy / terms 를 읽고 동의함. 없으면 주의 사항만 보여주고 로그인 안 함" },
 		},
 	},
 	logout = {
@@ -262,6 +267,8 @@ const function takeFlags(words: { string }): ({ string }, Flags)
 			flags.deps = true
 		elseif word == "--yes" then
 			flags.yes = true
+		elseif word == "--agree" then
+			flags.agree = true
 		elseif word == "--to" then
 			flags.to = words[i + 1]
 			if not flags.to then
@@ -463,12 +470,17 @@ const LOGIN_WARNINGS = {
 	"경고: 공용 PC 라면 다 쓴 뒤 logout 해주세요",
 	"경고: login <토큰> 은 권한(scope) 없이 만든 토큰을 쓰는 걸 추천",
 	"경고: Wally 업로드(publish --yes)는 되돌릴 수 없음 (같은 버전 재업로드, 삭제 불가)",
-	"자세한 내용은 privacy / terms",
 }
 
-function Commands.login(token: string?, context: Context)
+-- 로그인할 때마다 주의 사항을 보여주고, --agree 로 동의해야 진행
+function Commands.login(token: string?, flags: Flags, context: Context)
 	for _, warning in LOGIN_WARNINGS do
 		context.log(warning)
+	end
+	if not flags.agree then
+		context.log("경고: 아직 로그인 안 함. 위 내용과 privacy / terms 를 모두 읽고 동의하면 --agree 를 붙여서 다시 실행해주세요")
+		context.log(if token then "예: login <토큰> --agree" else "예: login --agree")
+		return
 	end
 	if token then
 		Auth.setToken(token, "token")
@@ -562,7 +574,7 @@ function Commands.run(line: string, context: Context)
 	elseif command == "clear" then
 		context.clear()
 	elseif command == "login" then
-		Commands.login(args[1], context)
+		Commands.login(args[1], flags, context)
 	elseif command == "logout" then
 		Auth.clear()
 		context.log("완료: 로그아웃 (저장된 토큰 삭제)")

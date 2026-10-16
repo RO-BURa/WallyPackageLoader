@@ -237,8 +237,17 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			return
 		end
 		-- login <토큰> 은 로그와 기록에 토큰이 남지 않게
-		const secret = string.match(line, "^%s*[lL][oO][gG][iI][nN]%s+%S+")
-		const shown = if secret then "login ********" else line
+		-- login 뒤에 -- 로 시작하지 않는 단어(토큰)가 있으면 가림
+		local secret = false
+		const words = string.split((string.gsub(line, "^%s+", "")), " ")
+		if string.lower(words[1] or "") == "login" then
+			for i = 2, #words do
+				if words[i] ~= "" and string.sub(words[i], 1, 2) ~= "--" then
+					secret = true
+				end
+			end
+		end
+		const shown = if secret then "login ******** " .. (if string.find(line, "--agree", 1, true) then "--agree" else "") else line
 		if not secret and history[#history] ~= line then
 			table.insert(history, line)
 			if #history > MAX_HISTORY then

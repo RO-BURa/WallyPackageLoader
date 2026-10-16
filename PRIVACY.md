@@ -18,6 +18,8 @@ The plugin never asks for your Roblox password, cookie or any other Roblox crede
 
 ## Where it is sent
 
+The plugin only talks to these services (the same domains Roblox Studio asks you to approve):
+
 | Destination | What is sent | When |
 | --- | --- | --- |
 | `github.com` | OAuth Device Flow requests | `login` |
@@ -35,4 +37,4 @@ Nothing is sent to the plugin author or to any other third party. Every HTTP des
 
 ## Contact
 
-Questions or concerns: https://github.com/RO-BURa/WallyPackageLoader/issues
+Questions or concerns: contact the plugin creator through their Roblox profile.
