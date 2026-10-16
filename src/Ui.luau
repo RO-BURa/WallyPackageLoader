@@ -212,7 +212,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 
 	-- 작업은 하나씩만, 오류는 로그로
 	local busy = false
-	-- 로그인했을 때만 보이는 버튼 (Logout, Publish)
+	-- 로그인했을 때만 보이는 버튼 (Logout, Prepare Publish)
 	const loginOnlyButtons: { TextButton } = {}
 	const function refreshLoginButtons()
 		const loggedIn = Auth.getToken() ~= nil
@@ -365,12 +365,12 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		Commands.help(context)
 	end)
 
-	-- 로그인하면 보임. Publish 는 입력창 내용을 그대로 publish 에 넘김 (--yes 가 없으면 미리보기만)
+	-- 로그인하면 보임. Prepare Publish 는 선택한 패키지에 wally.toml 을 만들거나 미리보기 (업로드는 publish --yes)
 	table.insert(loginOnlyButtons, addButton("Logout", function()
 		Commands.run("logout", context)
 	end))
-	table.insert(loginOnlyButtons, addButton("Publish", function()
-		Commands.run("publish " .. string.gsub(input.Text, "^%s*[pP][uU][bB][lL][iI][sS][hH]%s+", ""), context)
+	table.insert(loginOnlyButtons, addButton("Prepare Publish", function()
+		Commands.run("publish", context)
 	end))
 	refreshLoginButtons()
 
