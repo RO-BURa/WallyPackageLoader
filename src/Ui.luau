@@ -9,7 +9,7 @@ const Log = require(script.Parent.Log)
 
 const Ui = {}
 
-const MAX_LOG_LINES = 80
+const MAX_LOG_LINES = 300
 const MAX_HISTORY = 50
 
 const function themeColor(color: Enum.StudioStyleGuideColor): Color3
@@ -30,13 +30,18 @@ end
 const NO_FLAGS: Commands.Flags = { server = false, selected = false, to = nil }
 
 function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
-	const root = make("ScrollingFrame", {
+	-- 위: 입력창 + 버튼 (고정), 아래: 로그 (남은 공간 전체, 스크롤)
+	const root = make("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
-		ScrollBarThickness = 6,
 		BorderSizePixel = 0,
 		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.MainBackground),
+	}) :: Frame
+
+	const top = make("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = root,
 	}, {
 		make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
 		make("UIPadding", {
@@ -45,7 +50,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			PaddingLeft = UDim.new(0, 8),
 			PaddingRight = UDim.new(0, 8),
 		}),
-	}) :: ScrollingFrame
+	}) :: Frame
 
 	const input = make("TextBox", {
 		LayoutOrder = 1,
@@ -60,7 +65,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
 		PlaceholderColor3 = themeColor(Enum.StudioStyleGuideColor.DimmedText),
 		BorderColor3 = themeColor(Enum.StudioStyleGuideColor.InputFieldBorder),
-		Parent = root,
+		Parent = top,
 	}, {
 		make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
 	}) :: TextBox
@@ -70,7 +75,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
-		Parent = root,
+		Parent = top,
 	}, {
 		make("UIGridLayout", {
 			CellSize = UDim2.new(0.5, -3, 0, 26),
@@ -79,8 +84,27 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		}),
 	})
 
+	const logFrame = make("ScrollingFrame", {
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 8,
+		ScrollBarImageColor3 = themeColor(Enum.StudioStyleGuideColor.ScrollBar),
+		VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
+		BorderSizePixel = 1,
+		BorderColor3 = themeColor(Enum.StudioStyleGuideColor.Border),
+		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.ScriptBackground),
+		Parent = root,
+	}, {
+		make("UIPadding", {
+			PaddingTop = UDim.new(0, 4),
+			PaddingBottom = UDim.new(0, 4),
+			PaddingLeft = UDim.new(0, 6),
+			PaddingRight = UDim.new(0, 6),
+		}),
+	}) :: ScrollingFrame
+
 	const logLabel = make("TextLabel", {
-		LayoutOrder = 3,
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
@@ -91,8 +115,33 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
-		Parent = root,
+		Parent = logFrame,
 	}) :: TextLabel
+
+	-- 로그 영역이 위쪽 고정 영역 아래 남은 공간을 채움
+	const function layoutLog()
+		const topHeight = top.AbsoluteSize.Y
+		logFrame.Position = UDim2.fromOffset(8, topHeight)
+		logFrame.Size = UDim2.new(1, -16, 1, -topHeight - 8)
+	end
+	top:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutLog)
+	layoutLog()
+
+	-- 터미널처럼: 맨 아래에 있으면 새 로그를 따라 내려가고, 위로 스크롤해서 보고 있으면 그대로 둠
+	local followBottom = true
+	const function bottomY(): number
+		return math.max(0, logFrame.AbsoluteCanvasSize.Y - logFrame.AbsoluteWindowSize.Y)
+	end
+	logFrame:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+		followBottom = logFrame.CanvasPosition.Y >= bottomY() - 4
+	end)
+	const function scrollToBottom()
+		if followBottom then
+			logFrame.CanvasPosition = Vector2.new(0, bottomY())
+		end
+	end
+	logFrame:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(scrollToBottom)
+	logFrame:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(scrollToBottom)
 
 	const logLines: { string } = {}
 	const function log(message: string)
@@ -103,11 +152,11 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			table.remove(logLines, 1)
 		end
 		logLabel.Text = table.concat(logLines, "\n")
-		root.CanvasPosition = Vector2.new(0, math.huge)
 	end
 	const function clear()
 		table.clear(logLines)
 		logLabel.Text = ""
+		followBottom = true
 	end
 	Log.setSink(log)
 
