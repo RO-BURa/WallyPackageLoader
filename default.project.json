@@ -1,6 +1,16 @@
 {
   "name": "WallyPackageLoader",
+  "syncRules": [
+    { "pattern": "LICENSE", "use": "text" },
+    { "pattern": "THIRD_PARTY_NOTICES", "use": "text" }
+  ],
   "tree": {
-    "$path": "src"
+    "$path": "src",
+    "LICENSE": {
+      "$path": "LICENSE"
+    },
+    "THIRD_PARTY_NOTICES": {
+      "$path": "THIRD_PARTY_NOTICES"
+    }
   }
 }

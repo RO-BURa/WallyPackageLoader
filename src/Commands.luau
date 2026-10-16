@@ -5,6 +5,7 @@ const Selection = game:GetService("Selection")
 const Config = require(script.Parent.Config)
 const Fmt = require(script.Parent.Fmt)
 const Installer = require(script.Parent.Installer)
+const LicenseText = require(script.Parent.LicenseText)
 const Linker = require(script.Parent.Linker)
 
 export type Context = {
@@ -32,7 +33,7 @@ type HelpEntry = {
 	examples: { string }?,
 }
 
-const COMMAND_ORDER = { "add", "remove", "install", "import", "path", "list", "prune", "config", "clear", "help" }
+const COMMAND_ORDER = { "add", "remove", "install", "import", "path", "list", "prune", "config", "clear", "license", "help" }
 
 const LOCATION_OPTIONS = {
 	{ "--server", "server 경로에" },
@@ -98,6 +99,10 @@ const HELP: { [string]: HelpEntry } = {
 	clear = {
 		summary = "로그 지우기",
 		usage = { "clear" },
+	},
+	license = {
+		summary = "라이선스와 참고한 프로젝트 고지",
+		usage = { "license" },
 	},
 	help = {
 		summary = "도움말",
@@ -419,6 +424,8 @@ function Commands.run(line: string, context: Context)
 		Commands.openConfig(context)
 	elseif command == "clear" then
 		context.clear()
+	elseif command == "license" then
+		context.rich(Fmt.escape(LicenseText.text()))
 	elseif command == "help" or command == "?" then
 		Commands.help(context, args[1])
 	else

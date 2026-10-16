@@ -36,6 +36,7 @@ list                                  설치한 패키지 목록
 prune                                 안 쓰는 _Index 폴더 정리
 config                                Config 스크립트 열기
 clear                                 로그 지우기
+license                               라이선스와 참고한 프로젝트 고지
 help [명령어]                         도움말 (help add 처럼 자세히)
 ```
 ↑ / ↓ 로 이전에 입력한 명령을 불러옵니다.
@@ -115,7 +116,7 @@ rojo build --plugin WallyPackageLoader.rbxm
 
 ## 아직 안 되는 것
 - pesde 레지스트리 패키지 (`name = "scope/name"` 형식 의존성), GitHub 외 Git 저장소
-- 패키지 안의 `.rbxm` / `.rbxmx` / `.model.json`, `*.meta.json` 속성
+- 받은 패키지(Wally / GitHub / zip) 안에 들어 있는 `.rbxm` / `.rbxmx` / `.model.json` 파일은 건너뜀, `*.meta.json` 의 속성은 적용 안 됨
 - zip64, 암호화된 zip
 
 ## 참고한 레퍼런스
@@ -125,4 +126,6 @@ rojo build --plugin WallyPackageLoader.rbxm
 - [wally-package-types](https://github.com/JohnnyMorganz/wally-package-types) (MIT) - 타입 re-export 아이디어
 
 ## 라이선스
-[MIT](LICENSE)
+[MIT](LICENSE). 참고한 프로젝트의 고지는 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) 에 있습니다.
+두 파일 모두 빌드할 때 플러그인 안에 StringValue 로 들어가고 (`default.project.json` 의 `syncRules`),
+`license` 명령으로 볼 수 있습니다. `PackageLoaderConfig` 를 처음 만들 때 그 안에 `LICENSE` 모듈도 같이 만듭니다 (지워도 됨).
