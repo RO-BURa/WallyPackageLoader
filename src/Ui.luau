@@ -268,9 +268,14 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		historyIndex = #history + 1
 		input.Text = ""
 		logCommand(shown)
-		task.spawn(run, function()
-			Commands.run(line, context)
-		end)
+		-- cancel 은 다른 작업(로그인 대기)이 진행 중이어도 바로 실행
+		if string.lower((string.gsub(line, "^%s*(.-)%s*$", "%1"))) == "cancel" then
+			task.spawn(Commands.run, line, context)
+		else
+			task.spawn(run, function()
+				Commands.run(line, context)
+			end)
+		end
 		task.defer(function()
 			input:CaptureFocus()
 			-- 다시 포커스를 잡을 때 Enter 가 공백으로 들어가는 경우가 있어서 한 프레임 뒤 비움
