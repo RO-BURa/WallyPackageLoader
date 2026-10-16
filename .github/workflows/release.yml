@@ -1,0 +1,32 @@
+# v* 태그를 push 하면 플러그인 .rbxm 을 빌드해서 GitHub Release 에 첨부
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rojo
+        run: |
+          version=$(grep -oP 'rojo-rbx/rojo@\K[0-9.]+' rokit.toml)
+          curl -sSfL -o rojo.zip "https://github.com/rojo-rbx/rojo/releases/download/v${version}/rojo-${version}-linux-x86_64.zip"
+          unzip -q rojo.zip -d "$RUNNER_TEMP/rojo"
+          chmod +x "$RUNNER_TEMP/rojo/rojo"
+          echo "$RUNNER_TEMP/rojo" >> "$GITHUB_PATH"
+
+      - name: Build
+        run: rojo build default.project.json -o WallyPackageLoader.rbxm
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" WallyPackageLoader.rbxm --title "$GITHUB_REF_NAME" --generate-notes
