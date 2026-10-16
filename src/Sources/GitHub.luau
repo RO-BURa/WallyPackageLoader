@@ -76,6 +76,7 @@ function GitHub.resolve(owner: string, repo: string, rangeText: string?, ref: st
 		source = "github",
 		scope = string.lower(owner),
 		name = string.lower(repo),
+		displayName = repo,
 		version = version,
 		realm = if manifest then manifest.realm else "shared",
 		dependencies = if manifest then manifest.dependencies else {},

@@ -5,7 +5,6 @@
 const ServerStorage = game:GetService("ServerStorage")
 
 const ConfigEditor = require(script.Parent.Util.ConfigEditor)
-const Log = require(script.Parent.Log)
 
 export type Data = {
 	shared: string,
@@ -34,6 +33,8 @@ const DOCS = [==[
 --[[
 	PackageLoaderConfig
 
+	Keys with "-" must be written as ["vide-opinionated"] = "cayasde/vide-opinionated@0.4.3"
+
 	shared             Folder for shared packages        e.g. "ReplicatedStorage/Packages"
 	server             Folder for server packages        e.g. "ServerScriptService/ServerPackages"
 	dependencies       Alias = spec, installed to `shared`
@@ -47,10 +48,10 @@ const DOCS = [==[
 		"gh:owner/repo#main"        GitHub branch, tag or commit
 		"gh:owner/repo"             GitHub, latest semver tag or default branch
 
-	After editing this file by hand, press "Install All" in the plugin.
+	Add only writes here; press "Install All" (or run `install`) to install.
 	Add / Remove only edit the lines they need, so your comments are kept.
 	If the file can no longer be understood (e.g. the table is built with code),
-	the plugin rewrites the whole file and comments are lost.
+	Add / Remove fail and nothing is changed.
 ]]
 ]==]
 
@@ -215,22 +216,20 @@ function Config.write(data: Data)
 end
 
 -- 소스에서 바뀌는 부분만 고침 (주석, 순서 유지)
--- 구조를 알아볼 수 없거나 고친 결과를 읽을 수 없으면 파일 전체를 다시 씀
-const function edit(apply: (source: string) -> string, mutate: (data: Data) -> ())
+-- 구조를 알아볼 수 없거나 고친 결과를 읽을 수 없으면 아무것도 바꾸지 않고 오류
+const function edit(apply: (source: string) -> string)
 	const module: any = Config.getModule()
 	const original = module.Source
 	const ok, result = pcall(apply, original)
-	if ok then
-		module.Source = result
-		if pcall(Config.read) then
-			return
-		end
-		module.Source = original
+	if not ok then
+		error(`{CONFIG_NAME} 를 고칠 수 없어서 취소함: {result}`, 0)
 	end
-	Log.warn(`{CONFIG_NAME} 구조를 알아볼 수 없어 파일 전체를 다시 씀 ({if ok then "읽기 실패" else result})`)
-	const data = Config.read()
-	mutate(data)
-	Config.write(data)
+	module.Source = result
+	const readOk, readError = pcall(Config.read)
+	if not readOk then
+		module.Source = original
+		error(`{CONFIG_NAME} 를 고친 결과를 읽을 수 없어서 취소함: {readError}`, 0)
+	end
 end
 
 function Config.getSharedPath(): string
@@ -244,16 +243,12 @@ end
 function Config.setSharedPath(path: string)
 	edit(function(source)
 		return ConfigEditor.set(source, {}, "shared", string.format("%q", path))
-	end, function(data)
-		data.shared = path
 	end)
 end
 
 function Config.setServerPath(path: string)
 	edit(function(source)
 		return ConfigEditor.set(source, {}, "server", string.format("%q", path))
-	end, function(data)
-		data.server = path
 	end)
 end
 
@@ -267,29 +262,29 @@ const function sectionFor(data: Data, location: string): { string }
 	return { "custom", location }
 end
 
-const function mapFor(data: Data, section: { string }, create: boolean): { [string]: string }?
+const function mapFor(data: Data, section: { string }): { [string]: string }?
 	if section[1] == "custom" then
-		if create and not data.custom[section[2]] then
-			data.custom[section[2]] = {}
-		end
 		return data.custom[section[2]]
 	end
 	return (data :: any)[section[1]]
 end
 
-function Config.addDependency(alias: string, spec: string, location: string)
-	const section = sectionFor(Config.read(), location)
+-- 이미 같은 별칭이 있었으면 이전 스펙 반환
+function Config.addDependency(alias: string, spec: string, location: string): string?
+	const data = Config.read()
+	const section = sectionFor(data, location)
+	const map = mapFor(data, section)
+	const previous = map and map[alias]
 	edit(function(source)
 		return ConfigEditor.set(source, section, alias, string.format("%q", spec))
-	end, function(data)
-		(mapFor(data, section, true) :: { [string]: string })[alias] = spec
 	end)
+	return previous
 end
 
 function Config.removeDependency(alias: string, location: string)
 	const data = Config.read()
 	const section = sectionFor(data, location)
-	const map = mapFor(data, section, false)
+	const map = mapFor(data, section)
 	if not map or not map[alias] then
 		return
 	end
@@ -300,14 +295,6 @@ function Config.removeDependency(alias: string, location: string)
 			result = ConfigEditor.remove(result, { "custom" }, section[2])
 		end
 		return result
-	end, function(fallback)
-		const fallbackMap = mapFor(fallback, section, false)
-		if fallbackMap then
-			fallbackMap[alias] = nil
-		end
-		if section[1] == "custom" and fallback.custom[section[2]] and next(fallback.custom[section[2]]) == nil then
-			fallback.custom[section[2]] = nil
-		end
 	end)
 end
 

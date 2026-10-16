@@ -4,6 +4,7 @@ const Builder = require(script.Parent.Builder)
 const Config = require(script.Parent.Config)
 const Linker = require(script.Parent.Linker)
 const Log = require(script.Parent.Log)
+const Semver = require(script.Parent.Util.Semver)
 const Types = require(script.Parent.Sources.Types)
 const Wally = require(script.Parent.Sources.Wally)
 const GitHub = require(script.Parent.Sources.GitHub)
@@ -15,20 +16,14 @@ export type InstallOptions = {
 	alias: string?,
 	-- 설치할 폴더. 없으면 Config 의 shared 경로
 	location: Instance?,
-	-- Config 에 의존성으로 저장할지 (기본 true)
-	save: boolean?,
 	log: ((message: string) -> ())?,
 }
 
 const Installer = {}
 
--- "red-blox-util" -> "RedBloxUtil"
-function Installer.defaultAlias(name: string): string
-	const parts = {}
-	for word in string.gmatch(name, "[%w]+") do
-		table.insert(parts, string.upper(string.sub(word, 1, 1)) .. string.sub(word, 2))
-	end
-	return if #parts > 0 then table.concat(parts) else name
+-- 별칭을 안 적으면 원래 패키지 이름 그대로 (cayasde/vide-opinionated -> vide-opinionated)
+function Installer.defaultAlias(package: Package): string
+	return package.displayName or package.name
 end
 
 -- 스펙 문자열 -> 패키지
@@ -147,10 +142,10 @@ function Installer.serverRoot(): Instance
 end
 
 -- 패키지 하나를 의존성까지 설치. 별칭 반환
-function Installer.installPackage(package: Package, options: InstallOptions, spec: string?): string
+function Installer.installPackage(package: Package, options: InstallOptions): string
 	const context = newContext(options.log)
 	const base = options.location or context.sharedRoot
-	const alias = options.alias or Installer.defaultAlias(package.name)
+	const alias = options.alias or Installer.defaultAlias(package)
 
 	const ok, err = pcall(function()
 		const entry, packageInstance = placePackage(context, package, base)
@@ -161,15 +156,44 @@ function Installer.installPackage(package: Package, options: InstallOptions, spe
 		error(err, 0)
 	end
 
-	if spec and options.save ~= false then
-		Config.addDependency(alias, spec, Config.pathOf(base))
-	end
 	context.log(`완료: {alias} -> {package.scope}/{package.name}@{package.version} ({Config.pathOf(base)})`)
 	return alias
 end
 
 function Installer.install(spec: string, options: InstallOptions): string
-	return Installer.installPackage(Installer.resolve(spec), options, spec)
+	return Installer.installPackage(Installer.resolve(spec), options)
+end
+
+-- 버전을 안 적었으면 찾은 버전으로 고정 (wally add 처럼)
+--   cayasde/vide-opinionated -> cayasde/vide-opinionated@0.4.3
+const function pinVersion(spec: string, package: Package): string
+	const trimmed = string.match(spec, "^%s*(.-)%s*$") :: string
+	if string.find(trimmed, "[@#]") then
+		return trimmed
+	end
+	if Semver.parse(package.version) then
+		return `{trimmed}@{package.version}`
+	end
+	return trimmed
+end
+
+-- Config 에만 추가 (설치는 install). 패키지가 있는지 확인하고 버전을 고정함
+-- 반환: 별칭, Config 에 적은 스펙
+function Installer.add(spec: string, alias: string?, path: string, log: ((string) -> ())?): (string, string)
+	const logger = log or Log.write
+	logger(`확인 중: {spec}`)
+	const package = Installer.resolve(spec)
+	const finalAlias = alias or Installer.defaultAlias(package)
+	const pinned = pinVersion(spec, package)
+
+	const previous = Config.addDependency(finalAlias, pinned, path)
+	if previous and previous ~= pinned then
+		logger(`추가됨: {finalAlias} = {pinned} (이전: {previous}) ({path})`)
+	else
+		logger(`추가됨: {finalAlias} = {pinned} ({path})`)
+	end
+	logger("install 로 설치")
+	return finalAlias, pinned
 end
 
 -- Config 에 적힌 의존성 전체 설치 (wally install 과 비슷)
@@ -185,7 +209,6 @@ function Installer.installAll(log: ((string) -> ())?)
 			Installer.install(entry.spec, {
 				alias = entry.alias,
 				location = Config.resolvePath(entry.location, true),
-				save = false,
 				log = logger,
 			})
 		end)
@@ -223,7 +246,7 @@ function Installer.importFiles(options: InstallOptions)
 					alias = options.alias,
 					location = base,
 					log = context.log,
-				}, nil)
+				})
 			else
 				const instance = Builder.buildPackage(imported.vfs, imported.name)
 				if not instance then
