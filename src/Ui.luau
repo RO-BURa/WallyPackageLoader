@@ -1,6 +1,7 @@
 -- DockWidget UI: 입력창(엔터로 명령 실행) + 버튼 + 로그
 
 const Selection = game:GetService("Selection")
+const TextService = game:GetService("TextService")
 
 const Commands = require(script.Parent.Commands)
 const Config = require(script.Parent.Config)
@@ -10,6 +11,11 @@ const Log = require(script.Parent.Log)
 const Ui = {}
 
 const MAX_LOG_LINES = 300
+const LOG_FONT = Enum.Font.Code
+const LOG_TEXT_SIZE = 13
+const LOG_PADDING_X = 6
+const LOG_PADDING_Y = 4
+const COMMAND_COLOR = "#3B8EEA"
 const MAX_HISTORY = 50
 
 const function themeColor(color: Enum.StudioStyleGuideColor): Color3
@@ -86,7 +92,6 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 
 	const logFrame = make("ScrollingFrame", {
 		CanvasSize = UDim2.new(),
-		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 		ScrollBarThickness = 8,
 		ScrollBarImageColor3 = themeColor(Enum.StudioStyleGuideColor.ScrollBar),
@@ -95,22 +100,17 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		BorderColor3 = themeColor(Enum.StudioStyleGuideColor.Border),
 		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.ScriptBackground),
 		Parent = root,
-	}, {
-		make("UIPadding", {
-			PaddingTop = UDim.new(0, 4),
-			PaddingBottom = UDim.new(0, 4),
-			PaddingLeft = UDim.new(0, 6),
-			PaddingRight = UDim.new(0, 6),
-		}),
 	}) :: ScrollingFrame
 
+	-- 높이는 글자 크기로 직접 계산 (AutomaticSize 는 ScrollingFrame 안에서 안 늘어남)
 	const logLabel = make("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		Position = UDim2.fromOffset(LOG_PADDING_X, LOG_PADDING_Y),
+		Size = UDim2.new(1, -LOG_PADDING_X * 2, 0, 0),
 		BackgroundTransparency = 1,
 		Text = "",
-		Font = Enum.Font.Code,
-		TextSize = 13,
+		RichText = true,
+		Font = LOG_FONT,
+		TextSize = LOG_TEXT_SIZE,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextYAlignment = Enum.TextYAlignment.Top,
@@ -127,36 +127,69 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	top:GetPropertyChangedSignal("AbsoluteSize"):Connect(layoutLog)
 	layoutLog()
 
+	type LogLine = { text: string, command: boolean }
+	const logLines: { LogLine } = {}
+
 	-- 터미널처럼: 맨 아래에 있으면 새 로그를 따라 내려가고, 위로 스크롤해서 보고 있으면 그대로 둠
 	local followBottom = true
+	local canvasHeight = 0
 	const function bottomY(): number
-		return math.max(0, logFrame.AbsoluteCanvasSize.Y - logFrame.AbsoluteWindowSize.Y)
+		return math.max(0, canvasHeight - logFrame.AbsoluteWindowSize.Y)
 	end
 	logFrame:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
 		followBottom = logFrame.CanvasPosition.Y >= bottomY() - 4
 	end)
-	const function scrollToBottom()
-		if followBottom then
+
+	const function render()
+		const rich, plain = {}, {}
+		for _, line in logLines do
+			const escaped = string.gsub(string.gsub(string.gsub(line.text, "&", "&amp;"), "<", "&lt;"), ">", "&gt;")
+			if line.command then
+				table.insert(rich, `<font color="{COMMAND_COLOR}">●</font> {escaped}`)
+				table.insert(plain, `● {line.text}`)
+			else
+				table.insert(rich, escaped)
+				table.insert(plain, line.text)
+			end
+		end
+
+		const width = math.max(1, logFrame.AbsoluteWindowSize.X - LOG_PADDING_X * 2)
+		const textHeight = if #plain == 0
+			then 0
+			else TextService:GetTextSize(table.concat(plain, "\n"), LOG_TEXT_SIZE, LOG_FONT, Vector2.new(width, 1e6)).Y
+
+		const wasFollowing = followBottom
+		logLabel.Text = table.concat(rich, "\n")
+		logLabel.Size = UDim2.new(1, -LOG_PADDING_X * 2, 0, textHeight)
+		canvasHeight = textHeight + LOG_PADDING_Y * 2
+		logFrame.CanvasSize = UDim2.fromOffset(0, canvasHeight)
+		if wasFollowing then
 			logFrame.CanvasPosition = Vector2.new(0, bottomY())
+			followBottom = true
 		end
 	end
-	logFrame:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(scrollToBottom)
-	logFrame:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(scrollToBottom)
+	logFrame:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(render)
 
-	const logLines: { string } = {}
-	const function log(message: string)
-		for _, line in string.split(message, "\n") do
-			table.insert(logLines, line)
+	const function push(text: string, command: boolean)
+		for _, line in string.split(text, "\n") do
+			table.insert(logLines, { text = line, command = command })
 		end
 		while #logLines > MAX_LOG_LINES do
 			table.remove(logLines, 1)
 		end
-		logLabel.Text = table.concat(logLines, "\n")
+		render()
+	end
+	const function log(message: string)
+		push(message, false)
+	end
+	-- 입력한 명령은 앞에 파란 원
+	const function logCommand(line: string)
+		push(line, true)
 	end
 	const function clear()
 		table.clear(logLines)
-		logLabel.Text = ""
 		followBottom = true
+		render()
 	end
 	Log.setSink(log)
 
@@ -197,7 +230,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		end
 		historyIndex = #history + 1
 		input.Text = ""
-		log(`> {line}`)
+		logCommand(line)
 		task.spawn(run, function()
 			Commands.run(line, context)
 		end)
@@ -236,7 +269,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			Parent = buttonGrid,
 		}) :: TextButton
 		button.Activated:Connect(function()
-			log(`> [{text}]`)
+			logCommand(`[{text}]`)
 			task.spawn(run, job)
 		end)
 	end
@@ -305,6 +338,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			return {
 				busy = busy,
 				followBottom = followBottom,
+				canvasHeight = canvasHeight,
 				canvas = logFrame.AbsoluteCanvasSize,
 				window = logFrame.AbsoluteWindowSize,
 				position = logFrame.CanvasPosition,
