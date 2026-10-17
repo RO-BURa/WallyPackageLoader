@@ -1,6 +1,6 @@
 -- GitHub 로그인
 --   토큰은 기본적으로 메모리에만 (Studio 를 끄면 사라짐)
---   --remember 일 때만 비밀번호로 암호화해서 plugin:SetSetting 으로 이 컴퓨터에 저장 (unlock 으로 풂)
+--   --remember / --password 일 때만 비밀번호로 암호화해서 plugin:SetSetting 으로 이 컴퓨터에 저장 (login 으로 풂)
 --   플레이스에는 절대 안 넣음
 --   기기 로그인: wally login 과 같은 GitHub Device Flow (Wally 의 OAuth 앱) -> Wally 업로드 + GitHub 요청 한도
 --   토큰 입력: 직접 만든 토큰 -> GitHub 요청 한도만 (Wally 서버는 Wally 앱 토큰만 받음)
@@ -134,7 +134,7 @@ end
 function Auth.whoami(): string
 	const headers = Auth.githubHeaders()
 	if not headers then
-		error(if Auth.hasSaved() then "저장된 로그인이 잠겨 있음 (unlock)" else "로그인 안 됨 (login)", 0)
+		error(if Auth.hasSaved() then "저장된 로그인이 잠겨 있음 (login --password <비밀번호>)" else "로그인 안 됨 (login)", 0)
 	end
 	const info = Http.getJson("https://api.github.com/user", headers, true)
 	return info.login
