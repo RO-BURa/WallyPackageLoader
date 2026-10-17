@@ -39,9 +39,10 @@ list                                  설치한 패키지 목록
 prune                                 안 쓰는 _Index 폴더 정리
 config                                Config 스크립트 열기
 login --agree [--remember]            GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
+login --agree --password <비번> --r <비번>   로그인 + 비밀번호로 암호화해서 저장 (--r 은 확인용)
 login <토큰> --agree [--remember]     직접 만든 GitHub 토큰 (GitHub 요청 한도만)
 logout / whoami                       로그아웃 (저장된 것도 삭제) / 로그인한 계정
-unlock                                --remember 로 저장한 로그인을 비밀번호로 풀기
+login [--password <비번>]             저장한 로그인을 비밀번호로 풀기 (없으면 입력창에 * 로 가려서 받음)
 cancel                                기다리는 중인 GitHub 로그인 취소 (다른 작업 중에도 실행됨)
 publish [--yes | --no]                선택한 패키지를 Wally 에 업로드 (패키지 안의 wally.toml 사용)
 clear                                 로그 지우기
@@ -49,7 +50,8 @@ license                               라이선스와 참고한 프로젝트 고
 privacy / terms                       개인정보 처리 안내 / 이용 약관
 help [명령어]                         도움말 (help add 처럼 자세히)
 ```
-↑ / ↓ 로 이전에 입력한 명령을 불러옵니다.
+로그에서 입력했던 명령 줄(파란 원)을 클릭하면 입력창에 다시 들어갑니다. 로그는 드래그해서 선택하고 복사할 수 있습니다 (고쳐도 바로 되돌아감).
+토큰 / 비밀번호가 들어간 명령은 로그에 `****` 로 가려지고 클릭해도 다시 들어가지 않습니다.
 
 `add` 는 `wally add` 처럼 Config 에만 적습니다. 실제 설치는 `install` (Install All 버튼) 로 합니다.
 버전을 안 적으면 찾은 버전으로 고정해서 적습니다 (`cayasde/vide-opinionated` -> `cayasde/vide-opinionated@0.4.3`).
@@ -58,11 +60,12 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 - 로그인은 명령어로만 합니다. 로그인하면 Logout / Prepare Publish 버튼이 나타납니다.
 - 토큰은 기본적으로 **메모리에만** 있고 Studio 를 끄면 사라집니다. 플레이스(Config 등)에는 어느 경우에도 들어가지 않습니다.
 - `--remember` 를 붙이면 로그인 후 비밀번호(10자 이상, 두 번)를 정하고, 토큰을 그 비밀번호로 **암호화해서** `plugin:SetSetting` 으로 이 컴퓨터에 저장합니다.
-  Studio 를 다시 켜면 `unlock` 으로 비밀번호를 입력해 풉니다. 비밀번호는 입력창에 `*` 로 가려지고 로그와 입력 기록에 남지 않습니다.
+  `login --agree --password <비번> --r <비번>` 으로 바로 적어도 됩니다 (`--r` 은 오타 확인용, 로그에는 `****`).
+  Studio 를 다시 켜면 `login --password <비번>` (또는 `login` 후 `*` 로 가려지는 입력창) 으로 풉니다. 저장된 로그인이 있으면 `login` 은 새로 로그인하지 않고 저장된 걸 풉니다. 새로 로그인하려면 `logout` 후 `login --agree`.
   - 암호화: PBKDF2-HMAC-SHA256 (무작위 salt, 이 컴퓨터에서 약 1초 걸리는 반복 횟수, 최소 2만 번) + HMAC-SHA256 키스트림 + HMAC 태그
   - 설정 파일을 누가 가져가도 비밀번호 없이는 못 씁니다. 다만 비밀번호가 짧거나 흔하면 무차별 대입으로 풀릴 수 있으니 길게 정해주세요.
   - 비밀번호를 잊었으면 `logout` 후 다시 `login --agree --remember`.
-- `login <토큰>` 은 로그와 입력 기록에 남지 않습니다.
+- `login <토큰>` 의 토큰은 로그에 `****` 로 가려집니다.
 - `login` 은 할 때마다 주의 사항을 보여주고, `privacy` / `terms` 를 읽고 동의한다는 뜻으로 `--agree` 를 붙여야 진행합니다.
 - `login --agree`: `wally login` 과 같은 GitHub 기기 로그인입니다 (Wally 의 GitHub OAuth 앱, `read:user` 권한).
   나오는 주소(github.com/login/device)에서 코드를 입력하고 승인하면 됩니다.

@@ -17,7 +17,6 @@ const LOG_FONT = Enum.Font.Code
 const LOG_TEXT_SIZE = 13
 const LOG_PADDING_X = 6
 const LOG_PADDING_Y = 4
-const MAX_HISTORY = 50
 
 const function themeColor(color: Enum.StudioStyleGuideColor): Color3
 	return settings().Studio.Theme:GetColor(color)
@@ -104,12 +103,16 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	}) :: ScrollingFrame
 
 	-- 높이는 글자 크기로 직접 계산 (AutomaticSize 는 ScrollingFrame 안에서 안 늘어남)
-	const logLabel = make("TextLabel", {
+	-- 글자를 선택해서 복사할 수 있게 TextBox (고쳐도 바로 되돌림)
+	const logLabel = make("TextBox", {
 		Position = UDim2.fromOffset(LOG_PADDING_X, LOG_PADDING_Y),
 		Size = UDim2.new(1, -LOG_PADDING_X * 2, 0, 0),
 		BackgroundTransparency = 1,
 		Text = "",
 		RichText = true,
+		ClearTextOnFocus = false,
+		MultiLine = true,
+		TextEditable = true,
 		Font = LOG_FONT,
 		TextSize = LOG_TEXT_SIZE,
 		TextWrapped = true,
@@ -117,7 +120,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
 		Parent = logFrame,
-	}) :: TextLabel
+	}) :: TextBox
 
 	-- 로그 영역이 위쪽 고정 영역 아래 남은 공간을 채움
 	const function layoutLog()
@@ -130,6 +133,11 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 
 	-- 줄마다 RichText 서식 (색은 Fmt 의 "$이름", 그릴 때 테마 색으로 바꿈)
 	const logLines: { string } = {}
+	-- 같은 줄이 입력한 명령이면 그 명령 (클릭하면 입력창에 다시 넣음), 아니면 false
+	const logCommands: { string | false } = {}
+	-- 선택 / 복사 중에는 서식 없는 글자로 보여줌 (복사했을 때 태그가 같이 안 딸려오게)
+	local plainText = ""
+	local settingText = false
 
 	-- 터미널처럼: 맨 아래에 있으면 새 로그를 따라 내려가고, 위로 스크롤해서 보고 있으면 그대로 둠
 	local followBottom = true
@@ -164,23 +172,37 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	const function render()
 		const markup = table.concat(logLines, "\n")
 		const width = math.max(1, logFrame.AbsoluteWindowSize.X - LOG_PADDING_X * 2)
+		plainText = Fmt.strip(markup)
 		estimatedHeight = if #logLines == 0
 			then 0
-			else TextService:GetTextSize(Fmt.strip(markup), LOG_TEXT_SIZE, LOG_FONT, Vector2.new(width, 1e6)).Y
-		logLabel.Text = Fmt.resolve(markup, isDarkTheme())
+			else TextService:GetTextSize(plainText, LOG_TEXT_SIZE, LOG_FONT, Vector2.new(width, 1e6)).Y
+		settingText = true
+		if logLabel:IsFocused() then
+			logLabel.RichText = false
+			logLabel.Text = plainText
+		else
+			logLabel.RichText = true
+			logLabel.Text = Fmt.resolve(markup, isDarkTheme())
+		end
+		settingText = false
 		applyHeight()
 	end
 	logLabel:GetPropertyChangedSignal("TextBounds"):Connect(applyHeight)
 	logFrame:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(render)
 
-	const function rich(markup: string)
+	const function addLines(markup: string, command: string | false)
 		for _, line in string.split(markup, "\n") do
 			table.insert(logLines, line)
+			table.insert(logCommands, command)
 		end
 		while #logLines > MAX_LOG_LINES do
 			table.remove(logLines, 1)
+			table.remove(logCommands, 1)
 		end
 		render()
+	end
+	const function rich(markup: string)
+		addLines(markup, false)
 	end
 	-- 일반 글자: "오류:", "완료:" 같은 라벨에 색
 	const function log(message: string)
@@ -190,15 +212,49 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		end
 		rich(table.concat(lines, "\n"))
 	end
-	-- 입력한 명령은 앞에 파란 원
-	const function logCommand(line: string)
-		rich(Fmt.color("blue", "●") .. " " .. Fmt.escape(line))
+	-- 입력한 명령은 앞에 파란 원. reusable 이면 클릭해서 입력창에 다시 넣을 수 있음
+	const function logCommand(line: string, reusable: boolean?)
+		addLines(Fmt.color("blue", "●") .. " " .. Fmt.escape(line), if reusable then line else false)
 	end
 	const function clear()
 		table.clear(logLines)
+		table.clear(logCommands)
 		followBottom = true
 		render()
 	end
+
+	-- 로그: 포커스를 받으면 서식 없는 글자로 바꿔서 선택 / 복사, 고친 건 바로 되돌림
+	logLabel.Focused:Connect(render)
+	logLabel.FocusLost:Connect(render)
+	logLabel:GetPropertyChangedSignal("Text"):Connect(function()
+		if settingText or not logLabel:IsFocused() or logLabel.Text == plainText then
+			return
+		end
+		const cursor = logLabel.CursorPosition
+		settingText = true
+		logLabel.Text = plainText
+		logLabel.CursorPosition = math.min(cursor, #plainText + 1)
+		settingText = false
+	end)
+	-- 입력한 명령 줄을 클릭하면 (드래그로 선택한 게 아니면) 그 명령을 입력창에 넣음
+	logLabel:GetPropertyChangedSignal("CursorPosition"):Connect(function()
+		if settingText then
+			return
+		end
+		task.defer(function()
+			const cursor = logLabel.CursorPosition
+			if not logLabel:IsFocused() or cursor < 1 or logLabel.SelectionStart ~= -1 then
+				return
+			end
+			const before = string.sub(plainText, 1, cursor - 1)
+			const _, newlines = string.gsub(before, "\n", "")
+			const command = logCommands[newlines + 1]
+			if command then
+				input.Text = command
+				input.CursorPosition = #command + 1
+			end
+		end)
+	end)
 
 	-- Studio 테마가 바뀌면 색 다시 칠함
 	settings().Studio.ThemeChanged:Connect(function()
@@ -271,10 +327,6 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		refreshLoginButtons()
 	end
 
-	-- 입력 기록 (↑ / ↓)
-	const history: { string } = {}
-	local historyIndex = 0
-
 	input.FocusLost:Connect(function(enterPressed)
 		if not enterPressed then
 			return
@@ -299,27 +351,26 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		if string.match(line, "^%s*$") then
 			return
 		end
-		-- login <토큰> 은 로그와 기록에 토큰이 남지 않게
-		-- login 뒤에 -- 로 시작하지 않는 단어(토큰)가 있으면 가림
+		-- 토큰 / 비밀번호는 로그에 **** 로 (그 줄은 클릭해서 다시 쓸 수 없음)
+		--   login <토큰>, --password <비밀번호>, --r <비밀번호>
 		local secret = false
 		const words = string.split((string.gsub(line, "^%s+", "")), " ")
-		if string.lower(words[1] or "") == "login" then
-			for i = 2, #words do
-				if words[i] ~= "" and string.sub(words[i], 1, 2) ~= "--" then
-					secret = true
-				end
+		const isLogin = string.lower(words[1] or "") == "login"
+		const shownWords = {}
+		for i, word in words do
+			const previous = words[i - 1]
+			if previous == "--password" or previous == "--r" then
+				table.insert(shownWords, "****")
+				secret = true
+			elseif isLogin and i > 1 and word ~= "" and string.sub(word, 1, 2) ~= "--" then
+				table.insert(shownWords, "****")
+				secret = true
+			else
+				table.insert(shownWords, word)
 			end
 		end
-		const shown = if secret then "login ******** " .. (if string.find(line, "--agree", 1, true) then "--agree" else "") else line
-		if not secret and history[#history] ~= line then
-			table.insert(history, line)
-			if #history > MAX_HISTORY then
-				table.remove(history, 1)
-			end
-		end
-		historyIndex = #history + 1
 		input.Text = ""
-		logCommand(shown)
+		logCommand(table.concat(shownWords, " "), not secret)
 		-- cancel 은 다른 작업(로그인 대기)이 진행 중이어도 바로 실행
 		if string.lower((string.gsub(line, "^%s*(.-)%s*$", "%1"))) == "cancel" then
 			task.spawn(Commands.run, line, context)
@@ -338,20 +389,6 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		end)
 	end)
 
-	input.InputBegan:Connect(function(inputObject)
-		if inputObject.UserInputType ~= Enum.UserInputType.Keyboard or #history == 0 or secretWaiter then
-			return
-		end
-		if inputObject.KeyCode == Enum.KeyCode.Up then
-			historyIndex = math.max(1, historyIndex - 1)
-		elseif inputObject.KeyCode == Enum.KeyCode.Down then
-			historyIndex = math.min(#history + 1, historyIndex + 1)
-		else
-			return
-		end
-		input.Text = history[historyIndex] or ""
-		input.CursorPosition = #input.Text + 1
-	end)
 
 	local order = 0
 	const function addButton(text: string, job: () -> ()): TextButton
@@ -432,7 +469,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		log("경고: 예전 버전이 암호화 없이 저장한 토큰을 지움. login --agree --remember 로 다시 저장해주세요")
 	end
 	if Auth.hasSaved() then
-		log("저장된 GitHub 로그인이 있음. unlock 으로 풀기")
+		log("저장된 GitHub 로그인이 있음. login --password <비밀번호> 로 풀기")
 	end
 
 	const ok, data = pcall(Config.read)

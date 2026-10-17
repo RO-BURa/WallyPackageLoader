@@ -13,7 +13,7 @@ The plugin never asks for your Roblox password, cookie or any other Roblox crede
 ## Where it is stored
 
 - By default the GitHub token is kept **only in memory** and is forgotten when Roblox Studio closes.
-- Only if you log in with `--remember`, the token is **encrypted with a password you choose** (at least 10 characters) and saved **on your computer** in Roblox Studio's plugin settings (`plugin:SetSetting`). You unlock it with `unlock` after restarting Studio.
+- Only if you log in with `--remember` or `--password`, the token is **encrypted with a password you choose** (at least 10 characters) and saved **on your computer** in Roblox Studio's plugin settings (`plugin:SetSetting`). You unlock it with `login` and the password after restarting Studio.
   The password itself is never saved or sent anywhere. Plugin settings are stored as a plain file, so anyone who gets the file could try to guess a weak password; choose a long one.
 - It is **never** saved into the place (including `PackageLoaderConfig`), so it is not shared through Team Create or published places.
 - `PackageLoaderConfig` (in `ServerStorage`) stores only package names, versions and paths, and files you imported. It is part of your place.
