@@ -31,6 +31,8 @@ export type Flags = {
 	-- login 용 (주의 사항, privacy, terms 에 동의 / 토큰을 비밀번호로 암호화해서 저장)
 	agree: boolean?,
 	remember: boolean?,
+	-- logout 용 (저장된 토큰은 남김)
+	keep: boolean?,
 	-- 저장할 / 풀 비밀번호와 확인용 (--password <비밀번호> --r <비밀번호>)
 	password: string?,
 	confirm: string?,
@@ -157,8 +159,11 @@ const HELP: { [string]: HelpEntry } = {
 		},
 	},
 	logout = {
-		summary = "GitHub 로그아웃 (저장된 토큰 삭제)",
-		usage = { "logout" },
+		summary = "GitHub 로그아웃 (저장된 토큰도 삭제)",
+		usage = { "logout [--keep]" },
+		options = {
+			{ "--keep", "이번 세션만 로그아웃하고 저장된 토큰은 남김 (다음에 login --password 로 다시 풂)" },
+		},
 	},
 	cancel = {
 		summary = "기다리는 중인 GitHub 로그인 취소",
@@ -297,6 +302,8 @@ const function takeFlags(words: { string }): ({ string }, Flags)
 			flags.agree = true
 		elseif word == "--remember" then
 			flags.remember = true
+		elseif word == "--keep" then
+			flags.keep = true
 		elseif word == "--to" then
 			flags.to = words[i + 1]
 			if not flags.to then
@@ -731,8 +738,17 @@ function Commands.run(line: string, context: Context)
 	elseif command == "login" then
 		Commands.login(args[1], flags, context)
 	elseif command == "logout" then
-		Auth.clear()
-		context.log("완료: 로그아웃 (저장된 토큰도 삭제)")
+		if flags.keep then
+			Auth.clear(true)
+			context.log(
+				if Auth.hasSaved()
+					then "완료: 로그아웃 (저장된 토큰은 남김, login --password 로 다시 풂)"
+					else "완료: 로그아웃 (저장된 토큰 없음)"
+			)
+		else
+			Auth.clear()
+			context.log("완료: 로그아웃 (저장된 토큰도 삭제)")
+		end
 	elseif command == "cancel" then
 		if Auth.cancelLogin() then
 			context.log("취소 요청함. 곧 멈춤")
