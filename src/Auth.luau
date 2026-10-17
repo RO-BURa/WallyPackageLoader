@@ -12,10 +12,8 @@ export type Kind = "device" | "token"
 
 const Auth = {}
 
--- 비밀번호로 암호화한 토큰
-const SEALED_SETTING = "GitHubTokenSealed"
--- 예전 버전이 암호화 없이 저장하던 키 (보이면 지움)
-const LEGACY_SETTINGS = { "GitHubToken", "GitHubTokenKind" }
+-- 비밀번호로 암호화한 토큰 (로컬 플러그인끼리 설정을 같이 쓸 수 있어서 겹치지 않을 이름으로)
+const SEALED_SETTING = "RO_BURa.WallyPackageLoader.GitHubTokenSealed"
 const WALLY_INDEX_CONFIG = "https://raw.githubusercontent.com/UpliftGames/wally-index/main/config.json"
 -- Wally 인덱스 설정을 못 읽을 때 쓰는 값 (wally-index config.json 의 github_oauth_id)
 const FALLBACK_CLIENT_ID = "7bd503594a0f9a9f7ed3"
@@ -26,7 +24,6 @@ Auth.MIN_PASSWORD_LENGTH = 10
 Auth.KDF = { seconds = 1, minIterations = 20_000 }
 
 local pluginRef: Plugin? = nil
-local legacyRemoved = false
 
 const function setting(name: string): any
 	return if pluginRef then pluginRef:GetSetting(name) else nil
@@ -40,17 +37,6 @@ end
 
 function Auth.init(plugin: Plugin)
 	pluginRef = plugin
-	for _, name in LEGACY_SETTINGS do
-		if setting(name) ~= nil then
-			setSetting(name, nil)
-			legacyRemoved = true
-		end
-	end
-end
-
--- 예전 방식(암호화 없이)으로 저장돼 있던 토큰을 init 에서 지웠는지
-function Auth.legacyRemoved(): boolean
-	return legacyRemoved
 end
 
 -- 이번 Studio 세션 동안만 기억하는 토큰

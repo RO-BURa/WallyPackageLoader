@@ -465,9 +465,6 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 
 	root.Parent = widget
 
-	if Auth.legacyRemoved() then
-		log("경고: 예전 버전이 암호화 없이 저장한 토큰을 지움. login --agree --remember 로 다시 저장해주세요")
-	end
 	if Auth.hasSaved() then
 		log("저장된 GitHub 로그인이 있음. login --password <비밀번호> 로 풀기")
 	end
