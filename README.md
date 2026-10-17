@@ -41,7 +41,7 @@ config                                Config 스크립트 열기
 login --agree [--remember]            GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
 login --agree --password <비번> --r <비번>   로그인 + 비밀번호로 암호화해서 저장 (--r 은 확인용)
 login <토큰> --agree [--remember]     직접 만든 GitHub 토큰 (GitHub 요청 한도만)
-logout / whoami                       로그아웃 (저장된 것도 삭제) / 로그인한 계정
+logout [--keep] / whoami              로그아웃 (저장된 것도 삭제, --keep 이면 남김) / 로그인한 계정
 login [--password <비번>]             저장한 로그인을 비밀번호로 풀기 (없으면 입력창에 * 로 가려서 받음)
 cancel                                기다리는 중인 GitHub 로그인 취소 (다른 작업 중에도 실행됨)
 publish [--yes | --no]                선택한 패키지를 Wally 에 업로드 (패키지 안의 wally.toml 사용)

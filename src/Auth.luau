@@ -101,10 +101,13 @@ function Auth.unlock(password: string): number
 	return os.clock() - started
 end
 
-function Auth.clear()
+-- keepSaved 면 이번 세션만 로그아웃 (저장된 토큰은 남김)
+function Auth.clear(keepSaved: boolean?)
 	memoryToken = nil
 	memoryKind = nil
-	setSetting(SEALED_SETTING, nil)
+	if not keepSaved then
+		setSetting(SEALED_SETTING, nil)
+	end
 end
 
 -- api.github.com 요청에 붙일 헤더
