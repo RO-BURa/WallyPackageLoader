@@ -32,6 +32,13 @@ const function isDarkTheme(): boolean
 	return (background.R + background.G + background.B) / 3 < 0.5
 end
 
+-- 별 아이콘 + 개수 (1개 이상이면 굵은 노란 별, 내가 눌렀으면 표시)
+const function starMarkup(stars: number, starredByMe: boolean): string
+	const icon = Icons.rich("star", stars > 0)
+	const text = `{icon} {stars}` .. (if starredByMe then " (내가 누름)" else "")
+	return if stars > 0 or starredByMe then Fmt.color("yellow", text) else Fmt.color("dim", text)
+end
+
 const function make(className: string, props: { [string]: any }, children: { Instance }?): Instance
 	const instance = Instance.new(className)
 	for key, value in props do
@@ -380,10 +387,54 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	const addRange, _, addRangeText = iconButton("plus-small", "Add ^", { LayoutOrder = 3, Parent = controls })
 	const filesButton, filesIcon, filesText = iconButton("folder", "Files", { LayoutOrder = 4, Parent = controls })
 
+	-- 복사용: Config 에 적을 줄 (선택해서 Ctrl+C, 고쳐도 되돌아감)
+	const specBox = make("TextBox", {
+		Position = UDim2.fromOffset(0, 60),
+		Size = UDim2.new(1, 0, 0, 22),
+		Text = "",
+		ClearTextOnFocus = false,
+		TextEditable = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+		Font = Enum.Font.Code,
+		TextSize = 13,
+		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.InputFieldBackground),
+		TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
+		BorderColor3 = themeColor(Enum.StudioStyleGuideColor.InputFieldBorder),
+		Parent = detail,
+	}, {
+		make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
+	}) :: TextBox
+	local specText = ""
+	local settingSpec = false
+	const function setSpec(text: string)
+		specText = text
+		settingSpec = true
+		specBox.Text = text
+		settingSpec = false
+	end
+	specBox:GetPropertyChangedSignal("Text"):Connect(function()
+		if settingSpec or specBox.Text == specText then
+			return
+		end
+		const cursor = specBox.CursorPosition
+		settingSpec = true
+		specBox.Text = specText
+		specBox.CursorPosition = math.min(cursor, #specText + 1)
+		settingSpec = false
+	end)
+	-- 별칭 = "스펙", (Config 에 그대로 붙여넣거나 입력창에 넣어도 됨)
+	const function configLine(id: string, spec: string): string
+		const name = string.match(id, "([^/]+)$") or id
+		const key = if string.match(name, "^[%a_][%w_]*$") then name else `["{name}"]`
+		return `{key} = "{spec}",`
+	end
+	local viewId = ""
+
 	-- 본문: 글자 하나 (RichText), 높이는 TextBounds 로
 	const body = scrollFrame({
-		Position = UDim2.fromOffset(0, 60),
-		Size = UDim2.new(1, 0, 1, -60),
+		Position = UDim2.fromOffset(0, 88),
+		Size = UDim2.new(1, 0, 1, -88),
 		Parent = detail,
 	})
 	const bodyText = make("TextLabel", {
@@ -486,6 +537,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		current.showingFiles = false
 		versionText.Text = version.label
 		addExactText.Text = "Add " .. version.label
+		setSpec(configLine(viewId, version.spec))
 		addExact.Visible = true
 		addRange.Visible = version.rangeSpec ~= nil
 		addRangeText.Text = "Add ^"
@@ -603,6 +655,8 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		addExact.Visible = false
 		addRange.Visible = false
 		versionText.Text = "버전"
+		viewId = result.id
+		setSpec(configLine(result.id, result.spec))
 		title.Text = Fmt.resolve(Fmt.bold(Fmt.escape(result.id)), isDarkTheme())
 		setBody(Fmt.color("dim", "불러오는 중..."))
 		loadGeneration += 1
@@ -631,9 +685,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 					const repo = Details.githubRepo(owner :: string, name :: string)
 					const versions = Details.githubVersions(owner :: string, name :: string, repo.defaultBranch)
 					-- 별: 1개 이상이면 굵게, 내가 눌렀으면 표시
-					const starText = if repo.starred
-						then Fmt.color("yellow", `★ {repo.stars} (내가 누름)`)
-						else Fmt.color("dim", `★ {repo.stars}`)
+					const starText = starMarkup(repo.stars, repo.starred == true)
 					const newView: View = {
 						versions = versions,
 						info = function(version)
@@ -702,24 +754,14 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
 			Parent = item,
 		}) :: TextLabel
-		-- GitHub 은 별 개수 (별 아이콘: 1개 이상이면 굵게), Wally 는 최신 버전
+		-- GitHub 은 별 아이콘 + 개수 (1개 이상이면 굵은 노란 별), Wally 는 최신 버전
 		const stars = if result.source == "github" then tonumber(string.match(result.detail, "%d+")) or 0 else nil
-		const detailText = if stars then tostring(stars) else result.detail
+		const detailMarkup = if stars then starMarkup(stars, false) else Fmt.color("dim", Fmt.escape(result.detail))
 		const function setTitle(underline: boolean)
 			const name = if underline then `<u>{Fmt.escape(result.id)}</u>` else Fmt.escape(result.id)
-			titleLabel.Text = `<b>{name}</b>  <font transparency="0.4">{Fmt.escape(detailText)}</font>`
+			titleLabel.Text = Fmt.resolve(`<b>{name}</b>  {detailMarkup}`, isDarkTheme())
 		end
 		setTitle(false)
-		if stars then
-			Icons.label("star", 13, stars > 0, {
-				AnchorPoint = Vector2.new(1, 0),
-				Position = UDim2.new(1, -72, 0, 6),
-				TextColor3 = if stars > 0
-					then Color3.fromRGB(229, 192, 123)
-					else themeColor(Enum.StudioStyleGuideColor.DimmedText),
-				Parent = item,
-			})
-		end
 		make("TextLabel", {
 			Position = UDim2.fromOffset(6, 22),
 			Size = UDim2.new(1, -80, 0, 32),
