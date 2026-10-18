@@ -36,6 +36,7 @@ import [--server | --selected | --to <경로>]   파일에서 가져오기
 path shared <경로 | --selected>       shared 경로 설정
 path server <경로 | --selected>       server 경로 설정
 list                                  설치한 패키지 목록
+tree [--selected]                     의존성 트리 (Config 기준 / 선택한 wally.toml, thunk, 패키지 폴더 기준)
 prune                                 안 쓰는 _Index 폴더 정리
 config                                Config 스크립트 열기
 login --agree [--remember]            GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
@@ -83,6 +84,12 @@ help [명령어]                         도움말 (help add 처럼 자세히)
   - 의존성은 Wally 패키지 (`scope/name@버전`) 만 됩니다. 코드에서는 `require(script.Parent.별칭)` 으로 부릅니다.
     개발할 땐 패키지를 shared 경로 (`ReplicatedStorage/Packages`) 안에 두면 옆의 thunk 로 의존성이 바로 동작합니다.
   - **같은 버전은 다시 올릴 수 없고, 올린 것은 지울 수 없습니다.**
+
+### 검색 창
+툴바의 **Search** 버튼으로 엽니다. 검색어를 치고 Enter, 결과의 **Add** 로 Config 에 추가합니다 (설치는 Install All).
+- 검색할 곳: Wally, GitHub (여러 개 선택 가능). pesde 는 중앙 레지스트리가 없어지는 중이고 설치도 아직 안 돼서 비활성입니다.
+- ⚙: 작성자 (Wally scope / GitHub 사용자) 로 좁히기, GitHub 은 Luau 저장소만
+- GitHub 검색은 로그인 안 하면 요청 한도가 낮습니다 (분당 10번)
 
 ### 버튼
 | 버튼 | 동작 |
@@ -162,7 +169,9 @@ rojo build --plugin WallyPackageLoader.rbxm
 | 파일 | 역할 |
 |---|---|
 | `src/init.server.luau` | 툴바 버튼, DockWidget |
-| `src/Ui.luau` | UI |
+| `src/Ui.luau` | 메인 창 UI |
+| `src/SearchUi.luau` | 검색 창 UI |
+| `src/Tree.luau` | 의존성 트리 |
 | `src/Installer.luau` | 스펙 해석, 의존성 재귀 설치, Config 저장, 정리 |
 | `src/Linker.luau` | `_Index` 구조, thunk 생성, require 경로 계산 |
 | `src/Builder.luau` | 파일 -> Instance (Rojo 규칙, `default.project.json`) |
@@ -170,7 +179,7 @@ rojo build --plugin WallyPackageLoader.rbxm
 | `src/Http.luau` | HttpService 래퍼 |
 | `src/Auth.luau` | GitHub 로그인 (기기 로그인 / 토큰), 토큰 저장 |
 | `src/Publisher.luau` | Instance -> Wally 패키지 zip, 업로드 |
-| `src/Sources/` | Wally, GitHub, File, manifest(wally.toml / pesde.toml) |
+| `src/Sources/` | Wally, GitHub, File, manifest(wally.toml / pesde.toml), Search(Wally / GitHub 검색) |
 | `src/Util/` | Inflate(deflate/gzip), Zip(읽기/쓰기), Crypto(SHA-256, PBKDF2, 토큰 암호화), Semver, Toml, Lexer, TypeExports, ConfigEditor, RojoValues(Rojo 속성 값), Vfs |
 
 ## 아직 안 되는 것

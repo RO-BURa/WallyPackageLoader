@@ -9,6 +9,7 @@ const Installer = require(script.Parent.Installer)
 const Publisher = require(script.Parent.Publisher)
 const LicenseText = require(script.Parent.LicenseText)
 const Linker = require(script.Parent.Linker)
+const Tree = require(script.Parent.Tree)
 
 export type Context = {
 	plugin: Plugin,
@@ -56,6 +57,7 @@ const COMMAND_ORDER = {
 	"import",
 	"path",
 	"list",
+	"tree",
 	"prune",
 	"config",
 	"login",
@@ -122,6 +124,17 @@ const HELP: { [string]: HelpEntry } = {
 	list = {
 		summary = "설치한 패키지 목록 (ls)",
 		usage = { "list" },
+	},
+	tree = {
+		summary = "의존성 트리",
+		usage = { "tree", "tree --selected" },
+		options = {
+			{ "(없음)", "Config 에 적힌 패키지 기준. 설치된 건 _Index 를 보고, 안 된 건 서버에서 찾아서 그림" },
+			{ "--selected", "Explorer 에서 선택한 것 기준: wally.toml (또는 그게 든 패키지), thunk, _Index 패키지, 패키지 폴더" },
+		},
+		notes = {
+			"(위와 같음): 위에서 이미 펼친 패키지, (순환): 서로를 의존, (server): 서버 전용",
+		},
 	},
 	prune = {
 		summary = "안 쓰는 _Index 폴더 정리",
@@ -431,6 +444,120 @@ function Commands.setPath(kind: string, value: string?, context: Context)
 	context.log(`{kind} 경로: {path}`)
 end
 
+-- 트리 출력
+const function printTree(roots: { Tree.Node }, context: Context)
+	if #roots == 0 then
+		context.log("보여줄 의존성이 없음")
+		return
+	end
+	for _, line in Tree.lines(roots) do
+		local text = Fmt.color("dim", Fmt.escape(line.prefix)) .. Fmt.bold(Fmt.escape(line.alias))
+		text ..= "  " .. Fmt.color("dim", Fmt.escape(line.label))
+		if line.note then
+			text ..= " " .. Fmt.color("yellow", Fmt.escape(line.note))
+		end
+		context.rich(text)
+	end
+end
+
+-- Instance 를 기준으로 트리 루트들
+const function treeFromInstance(target: Instance): { Tree.Node }
+	const installed = Tree.installed()
+
+	-- wally.toml (또는 그게 든 패키지)
+	const manifestScript = if target.Name == Publisher.MANIFEST_NAME and target:IsA("ModuleScript")
+		then target
+		else Publisher.getManifest(target)
+	if manifestScript then
+		const data = Publisher.readManifest(manifestScript)
+		const package = if type(data.package) == "table" then data.package else {}
+		const label = `{tostring(package.name or "?")}@{tostring(package.version or "?")} (wally.toml)`
+		const remote = Tree.remote(Installer.resolve)
+		return {
+			remote.manifest(
+				(manifestScript.Parent :: Instance).Name,
+				label,
+				data.dependencies or {},
+				data["server-dependencies"] or {}
+			),
+		}
+	end
+
+	if target:GetAttribute(Linker.LINK_ATTRIBUTE) then
+		return { installed.thunk(target) }
+	end
+	if target:GetAttribute(Linker.ENTRY_ATTRIBUTE) then
+		return { installed.entry(target) }
+	end
+	const parent = target.Parent
+	if parent and parent:GetAttribute(Linker.ENTRY_ATTRIBUTE) then
+		return { installed.entry(parent) }
+	end
+
+	-- 패키지 폴더: 안의 thunk 전부
+	const roots = {}
+	const thunks = {}
+	for _, child in target:GetChildren() do
+		if child:GetAttribute(Linker.LINK_ATTRIBUTE) then
+			table.insert(thunks, child)
+		end
+	end
+	table.sort(thunks, function(a, b)
+		return string.lower(a.Name) < string.lower(b.Name)
+	end)
+	for _, thunk in thunks do
+		table.insert(roots, installed.thunk(thunk))
+	end
+	if #roots == 0 then
+		error(`{target.Name}: wally.toml, thunk, 패키지 폴더 중 하나를 선택해주세요`, 0)
+	end
+	return roots
+end
+
+function Commands.tree(flags: Flags, context: Context)
+	if flags.selected then
+		const target = selected()
+		if not target then
+			error("Explorer 에서 wally.toml, 패키지, 패키지 폴더 중 하나를 선택해주세요", 0)
+		end
+		printTree(treeFromInstance(target), context)
+		return
+	end
+
+	-- Config 기준: 설치된 건 _Index, 안 된 건 서버에서
+	const installed = Tree.installed()
+	local remote = nil
+	const groups: { [string]: { Tree.Node } } = {}
+	const order: { string } = {}
+	for _, entry in Config.entries() do
+		const folder = Config.resolvePath(entry.location, false)
+		const thunk = if folder then folder:FindFirstChild(entry.alias) else nil
+		local node: Tree.Node
+		if thunk and thunk:GetAttribute(Linker.LINK_ATTRIBUTE) then
+			node = installed.thunk(thunk)
+		elseif entry.spec then
+			remote = remote or Tree.remote(Installer.resolve)
+			node = remote.spec(entry.alias, entry.spec)
+			node.note = (if node.note then node.note .. " " else "") .. "(설치 안 됨)"
+		else
+			node = { alias = entry.alias, label = "직접 넣은 것", note = "(설치 안 됨)", children = {} }
+		end
+		if not groups[entry.location] then
+			groups[entry.location] = {}
+			table.insert(order, entry.location)
+		end
+		table.insert(groups[entry.location], node)
+	end
+	if #order == 0 then
+		context.log("Config 에 적힌 패키지가 없음")
+		return
+	end
+	for _, location in order do
+		section(context, location)
+		printTree(groups[location], context)
+	end
+end
+
 function Commands.list(context: Context)
 	const entries = Config.entries()
 	if #entries == 0 then
@@ -726,6 +853,8 @@ function Commands.run(line: string, context: Context)
 		Commands.import(flags, context)
 	elseif command == "path" then
 		Commands.setPath(string.lower(args[1] or ""), if flags.selected then "--selected" else args[2], context)
+	elseif command == "tree" then
+		Commands.tree(flags, context)
 	elseif command == "list" or command == "ls" then
 		Commands.list(context)
 	elseif command == "prune" then

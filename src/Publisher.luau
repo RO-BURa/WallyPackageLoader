@@ -47,7 +47,6 @@ const function tomlSection(lines: { string }, title: string, map: { [string]: st
 		table.insert(keys, key)
 	end
 	table.sort(keys)
-	table.insert(lines, "")
 	table.insert(lines, `[{title}]`)
 	for _, key in keys do
 		table.insert(lines, `{tomlKey(key)} = {string.format("%q", map[key])}`)
@@ -109,17 +108,37 @@ function Publisher.createManifest(source: Instance, scope: string?): ModuleScrip
 		end
 	end
 
+	const realm = if source:IsDescendantOf(game:GetService("ServerScriptService"))
+			or source:IsDescendantOf(game:GetService("ServerStorage"))
+		then "server"
+		else "shared"
 	const lines = {
+		"# # 으로 시작하는 줄은 주석 (설명). 값은 꼭 \"...\" 로 감싸기",
+		"",
 		"[package]",
+		"# scope/이름. scope 는 GitHub 아이디(또는 이미 가진 scope), 전부 소문자 / 숫자 / - / _",
 		`name = "{if scope then string.lower(scope) else "scope"}/{name}"`,
+		"# 올릴 때마다 올려야 함. 같은 버전은 다시 못 올리고 올린 건 못 지움 (예: 0.1.0 -> 0.1.1)",
 		`version = "0.1.0"`,
+		"# 공식 Wally 레지스트리. 보통 바꿀 일 없음",
 		`registry = "{REGISTRY}"`,
-		`realm = "{if source:IsDescendantOf(game:GetService("ServerScriptService")) or source:IsDescendantOf(game:GetService("ServerStorage")) then "server" else "shared"}"`,
+		"# shared: 클라이언트 / 서버 둘 다 (ReplicatedStorage), server: 서버만 (ServerScriptService 등)",
+		`realm = "{realm}"`,
+		"# 패키지 설명 (Wally 사이트와 검색에 나옴)",
 		`description = ""`,
+		"# 만든 사람 목록. 예: [\"RO_BURa\"]",
 		`authors = []`,
+		"# 라이선스. 예: \"MIT\"",
 		`license = ""`,
+		"",
+		"# 의존성: 별칭 = \"scope/name@버전\"",
+		"# 코드에서는 require(script.Parent.별칭) 으로 불러옴",
+		"# 버전: ^1.2 (1.x 중 최신), 1.2.3 (정확히), >=1, <2 등",
+		"# 예: Promise = \"evaera/promise@^4\"",
 	}
 	tomlSection(lines, "dependencies", shared)
+	table.insert(lines, "")
+	table.insert(lines, "# 서버에서만 쓰는 의존성 (realm 이 server 인 패키지만 쓸 수 있음)")
 	tomlSection(lines, "server-dependencies", server)
 
 	const manifest = Instance.new("ModuleScript")
@@ -138,6 +157,15 @@ const function manifestText(manifest: ModuleScript): string
 	const source = (manifest :: any).Source :: string
 	const _, body = string.match(source, "return%s*%[(=*)%[\n?(.-)%]%1%]")
 	return body or source
+end
+
+-- wally.toml ModuleScript 를 읽은 테이블 (Toml.decode)
+function Publisher.readManifest(manifest: ModuleScript): { [string]: any }
+	const ok, data = pcall(Toml.decode, manifestText(manifest))
+	if not ok then
+		error(`{MANIFEST_NAME} 을 읽을 수 없음: {data}`, 0)
+	end
+	return data
 end
 
 -- 의존성 하나 검사 (Wally 에는 Wally 패키지만 의존성으로 올릴 수 있음)
