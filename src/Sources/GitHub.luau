@@ -23,7 +23,7 @@ const function sanitize(text: string): string
 	return (string.gsub(text, "[^%w%.%-_+]", "-"))
 end
 
-const function listTags(owner: string, repo: string): { string }
+function GitHub.listTags(owner: string, repo: string): { string }
 	const names = {}
 	-- 태그가 많은 저장소를 위해 최대 3 페이지
 	for page = 1, 3 do
@@ -46,7 +46,7 @@ function GitHub.resolve(owner: string, repo: string, rangeText: string?, ref: st
 		version = sanitize(ref)
 		downloadRef = ref
 	else
-		const tags = listTags(owner, repo)
+		const tags = GitHub.listTags(owner, repo)
 		const candidates, tagNames = {}, {}
 		for _, tag in tags do
 			const parsed = Semver.parse(tag)

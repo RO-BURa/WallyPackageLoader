@@ -34,6 +34,8 @@ export type Flags = {
 	remember: boolean?,
 	-- logout 용 (저장된 토큰은 남김)
 	keep: boolean?,
+	-- import 용 (파일 대신 Explorer 에서 선택한 것을 가져옴)
+	select: boolean?,
 	-- 저장할 / 풀 비밀번호와 확인용 (--password <비밀번호> --r <비밀번호>)
 	password: string?,
 	confirm: string?,
@@ -113,8 +115,13 @@ const HELP: { [string]: HelpEntry } = {
 	},
 	import = {
 		summary = "파일에서 가져오기 (.lua / .luau 여러 개, .zip). Config 아래에 보관하고 이름 = script.이름 으로 추가",
-		usage = { "import [옵션]" },
-		options = LOCATION_OPTIONS,
+		usage = { "import [옵션]", "import --select [--server | --to <경로>]" },
+		options = {
+			LOCATION_OPTIONS[1],
+			LOCATION_OPTIONS[2],
+			LOCATION_OPTIONS[3],
+			{ "--select", "파일 대신 Explorer 에서 선택한 것을 복제해서 가져옴 (원본은 그대로)" },
+		},
 	},
 	path = {
 		summary = "shared / server 경로 설정",
@@ -317,6 +324,8 @@ const function takeFlags(words: { string }): ({ string }, Flags)
 			flags.remember = true
 		elseif word == "--keep" then
 			flags.keep = true
+		elseif word == "--select" then
+			flags.select = true
 		elseif word == "--to" then
 			flags.to = words[i + 1]
 			if not flags.to then
@@ -419,6 +428,18 @@ function Commands.remove(rawText: string, context: Context)
 end
 
 function Commands.import(flags: Flags, context: Context, selectedFallback: boolean?)
+	if flags.select then
+		const target = selected()
+		if not target then
+			error("Explorer 에서 가져올 것을 선택해주세요", 0)
+		end
+		-- --select 일 때 --selected 는 의미가 겹쳐서 설치 위치는 --server / --to 만
+		Installer.importInstance(target, {
+			location = targetFor({ server = flags.server, selected = false, to = flags.to }),
+			log = context.log,
+		})
+		return
+	end
 	Installer.importFiles({ location = targetFor(flags, selectedFallback), log = context.log })
 end
 
