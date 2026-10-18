@@ -33,6 +33,7 @@ add <패키지> --to ServerStorage/Libs  지정한 경로에 추가
 remove asdf  /  remove ro-bura/signal 별칭이나 패키지 이름으로 삭제 (rm 도 됨)
 install                               Config 대로 설치 (Config 에 없는 건 지우고 적힌 건 설치)
 import [--server | --selected | --to <경로>]   파일에서 가져오기
+import --select [--server | --to <경로>]      Explorer 에서 선택한 것을 복제해서 가져오기 (원본은 그대로)
 path shared <경로 | --selected>       shared 경로 설정
 path server <경로 | --selected>       server 경로 설정
 list                                  설치한 패키지 목록
@@ -86,10 +87,14 @@ help [명령어]                         도움말 (help add 처럼 자세히)
   - **같은 버전은 다시 올릴 수 없고, 올린 것은 지울 수 없습니다.**
 
 ### 검색 창
-툴바의 **Search** 버튼으로 엽니다. 검색어를 치고 Enter, 결과의 **Add** 로 Config 에 추가합니다 (설치는 Install All).
-- 검색할 곳: Wally, GitHub (여러 개 선택 가능). pesde 는 중앙 레지스트리가 없어지는 중이고 설치도 아직 안 돼서 비활성입니다.
+툴바의 **Search** 버튼으로 엽니다. 검색어를 치고 Enter (또는 돋보기 버튼), 결과의 **Add** 로 Config 에 추가합니다 (설치는 Install All).
+- 검색할 곳: Wally, GitHub (여러 개 선택 가능). pesde 는 이 플러그인이 pesde 레지스트리 패키지를 아직 설치하지 못해서 비활성입니다.
 - ⚙: 작성자 (Wally scope / GitHub 사용자) 로 좁히기, GitHub 은 Luau 저장소만
-- GitHub 검색은 로그인 안 하면 요청 한도가 낮습니다 (분당 10번)
+- GitHub 검색은 저장소 이름 / 설명으로 찾습니다 (wally.toml 이 있는지는 안 봄). 로그인 안 하면 요청 한도가 낮습니다 (분당 10번)
+- 결과를 누르면 상세 화면: 버전 고르기, 버전별 설명 / realm / license / authors / 의존성, `Add <버전>` / `Add ^<버전>`, **Files** (내부 파일 구조)
+  - GitHub: 별 개수 (로그인했으면 내가 눌렀는지), license, 마지막 push, wally.toml / pesde.toml 의존성, README 앞부분
+  - Wally 의 Files 는 패키지 zip 을 받아서 보여줍니다
+- 아이콘은 Studio 에 들어 있는 Roblox Builder Icons 폰트를 씁니다
 
 ### 버튼
 | 버튼 | 동작 |

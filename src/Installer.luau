@@ -66,6 +66,7 @@ type Context = {
 }
 
 local placePackage: (context: Context, package: Package, root: Instance) -> (Instance, Instance)
+local storeAndInstall: (stored: Instance, alias: string, base: Instance, log: (string) -> ()) -> ()
 
 const function linkDependencies(
 	context: Context,
@@ -321,6 +322,42 @@ function Installer.installAll(log: ((string) -> ())?)
 	Installer.prune(logger)
 end
 
+-- Config.Imported 에 보관하고 "별칭 = script.Imported.별칭" 으로 Config 에 적은 뒤 설치
+storeAndInstall = function(stored: Instance, alias: string, base: Instance, log: (string) -> ())
+	const path = Config.pathOf(base)
+	const storage = Config.storage()
+	stored.Name = alias
+	const existing = storage:FindFirstChild(alias)
+	if existing then
+		existing:Destroy()
+	end
+	stored.Parent = storage
+
+	Config.addDependency(alias, stored, path)
+	log(`가져옴: {alias} = {Config.childExpression(stored)} ({path})`)
+	Installer.installSource(alias, stored, { location = base, log = log })
+end
+
+-- Explorer 에서 선택한 것을 복제해서 가져오기 (Imported 폴더에 넣고 Config 에 추가, 설치)
+function Installer.importInstance(source: Instance, options: InstallOptions)
+	const context = newContext(options.log)
+	if Linker.isManaged(source) then
+		error(`{source.Name} 은 플러그인이 만든 thunk / 복사본이라 가져올 수 없음 (원본을 선택해주세요)`, 0)
+	end
+	if source:IsDescendantOf(Config.storage()) then
+		error(`{source.Name} 은 이미 가져온 것`, 0)
+	end
+	if source:IsDescendantOf(Config.getModule()) then
+		error("PackageLoaderConfig 안의 것은 가져올 수 없음", 0)
+	end
+	const ok, copy = pcall(source.Clone, source)
+	if not ok or not copy then
+		error(`{source.Name} 을 복제할 수 없음 (Archivable 이 꺼져 있는지 확인)`, 0)
+	end
+	const base = options.location or context.sharedRoot()
+	storeAndInstall(copy, options.alias or source.Name, base, context.log)
+end
+
 -- 파일에서 가져오기 (여러 개 선택 가능)
 -- 가져온 것은 Config 모듈 아래에 보관하고 "이름 = script.이름" 으로 Config 에 적은 뒤 설치
 function Installer.importFiles(options: InstallOptions)
@@ -332,8 +369,6 @@ function Installer.importFiles(options: InstallOptions)
 		context.log("선택한 파일이 없음")
 		return
 	end
-
-	const storage = Config.storage()
 	for _, file in files do
 		const ok, err = pcall(function()
 			const imported = File.read(file)
@@ -366,17 +401,7 @@ function Installer.importFiles(options: InstallOptions)
 				defaultAlias = imported.name
 			end
 
-			const alias = options.alias or defaultAlias
-			stored.Name = alias
-			const existing = storage:FindFirstChild(alias)
-			if existing then
-				existing:Destroy()
-			end
-			stored.Parent = storage
-
-			Config.addDependency(alias, stored, path)
-			context.log(`가져옴: {alias} = {Config.childExpression(stored)} ({path})`)
-			Installer.installSource(alias, stored, { location = base, log = context.log })
+			storeAndInstall(stored, options.alias or defaultAlias, base, context.log)
 		end)
 		if not ok then
 			context.log(`실패: {file.Name} - {err}`)
