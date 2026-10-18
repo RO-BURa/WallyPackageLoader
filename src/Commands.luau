@@ -90,6 +90,7 @@ const HELP: { [string]: HelpEntry } = {
 			{ "", "sleitnick/signal@^2      Wally" },
 			{ "", "gh:owner/repo@^1         GitHub 태그" },
 			{ "", "gh:owner/repo#main       GitHub 브랜치 / 태그 / 커밋" },
+			{ "", "pesde:scope/name@^1      pesde 레지스트리" },
 		},
 		options = LOCATION_OPTIONS,
 		examples = {

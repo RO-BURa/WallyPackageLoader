@@ -5,9 +5,10 @@ const HttpService = game:GetService("HttpService")
 const Auth = require(script.Parent.Parent.Auth)
 const Http = require(script.Parent.Parent.Http)
 const Semver = require(script.Parent.Parent.Util.Semver)
+const Pesde = require(script.Parent.Pesde)
 
 export type Result = {
-	source: "wally" | "github",
+	source: "wally" | "github" | "pesde",
 	-- "scope/name" 또는 "owner/repo"
 	id: string,
 	-- 최신 버전 (GitHub 는 별 개수 등)
@@ -67,6 +68,42 @@ function Search.wally(query: string, options: Options): { Result }
 					detail = version,
 					description = if type(item.description) == "string" then item.description else "",
 					spec = if version ~= "?" then `{item.scope}/{item.name}@{version}` else `{item.scope}/{item.name}`,
+				})
+			end
+		end
+		if #results >= (options.limit or DEFAULT_LIMIT) then
+			break
+		end
+	end
+	return results
+end
+
+-- pesde: Roblox 용 target (roblox / roblox_server) 이 있는 패키지만
+function Search.pesde(query: string, options: Options): { Result }
+	const author = if options.author and options.author ~= "" then string.lower(options.author) else nil
+	const text = if query ~= "" then query else (author or "")
+	if text == "" then
+		error("검색어를 입력해주세요", 0)
+	end
+	const data = Http.getJson(`{Pesde.API}/search?query={HttpService:UrlEncode(text)}`, nil, true)
+	const results: { Result } = {}
+	for _, item in if type(data) == "table" and type(data.data) == "table" then data.data else {} do
+		if type(item) == "table" and type(item.name) == "string" then
+			local roblox = false
+			for _, target in if type(item.targets) == "table" then item.targets else {} do
+				if target.kind == "roblox" or target.kind == "roblox_server" then
+					roblox = true
+				end
+			end
+			const scope = string.match(item.name, "^([^/]+)/")
+			if roblox and (not author or string.lower(scope or "") == author) then
+				const version = if type(item.version) == "string" then item.version else "?"
+				table.insert(results, {
+					source = "pesde",
+					id = item.name,
+					detail = version,
+					description = if type(item.description) == "string" then item.description else "",
+					spec = if version ~= "?" then `pesde:{item.name}@{version}` else `pesde:{item.name}`,
 				})
 			end
 		end

@@ -60,6 +60,7 @@ const DOCS = [==[
 		"gh:owner/repo@^1.0"        GitHub, highest semver tag (v1.2.3 / 1.2.3)
 		"gh:owner/repo#main"        GitHub branch, tag or commit
 		"gh:owner/repo"             GitHub, latest semver tag or default branch
+		"pesde:scope/name@^1.0"     pesde registry package
 
 	Add only writes here; press "Install All" (or run `install`) to install.
 	Install also removes packages (made by the plugin) that are no longer listed here.

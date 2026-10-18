@@ -51,6 +51,10 @@ end
 
 -- "ro-bura_signal@1.0.0" -> "ro-bura/signal@1.0.0", "custom_X" -> "직접 넣은 것"
 const function entryLabel(entry: Instance): string
+	const pesdeScope, pesdeRest = string.match(entry.Name, "^pesde%+([^_]+)_(.+@.+)$")
+	if pesdeScope then
+		return `pesde:{pesdeScope}/{pesdeRest}`
+	end
 	const scope, rest = string.match(entry.Name, "^([^_]+)_(.+@.+)$")
 	if scope then
 		return `{scope}/{rest}`
@@ -152,7 +156,7 @@ function Tree.remote(resolve: Resolver)
 			node.note = "(찾을 수 없음)"
 			return node
 		end
-		const id = `{package.scope}/{package.name}@{package.version}`
+		const id = (if package.source == "pesde" then "pesde:" else "") .. `{package.scope}/{package.name}@{package.version}`
 		node.label = id
 		if server or package.realm == "server" then
 			node.note = "(server)"

@@ -16,12 +16,13 @@ const ICON_SIZE = 16
 
 type Settings = {
 	wally: boolean,
+	pesde: boolean,
 	github: boolean,
 	luauOnly: boolean,
 	author: string,
 }
 
-const DEFAULT_SETTINGS: Settings = { wally = true, github = false, luauOnly = true, author = "" }
+const DEFAULT_SETTINGS: Settings = { wally = true, pesde = false, github = false, luauOnly = true, author = "" }
 
 const function themeColor(color: Enum.StudioStyleGuideColor): Color3
 	return settings().Studio.Theme:GetColor(color)
@@ -248,10 +249,11 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	end, function(value)
 		current.wally = value
 	end)
-	-- pesde: 플러그인이 pesde 레지스트리 패키지를 아직 설치 못 함
 	toggle(toggles, 2, "pesde", function()
-		return false
-	end, nil)
+		return current.pesde
+	end, function(value)
+		current.pesde = value
+	end)
 	toggle(toggles, 3, "GitHub", function()
 		return current.github
 	end, function(value)
@@ -432,17 +434,21 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	local viewId = ""
 
 	-- 본문: 글자 하나 (RichText), 높이는 TextBounds 로
+	-- 선택해서 복사할 수 있게 TextBox (누르면 서식 없는 글자로, 고치면 되돌림)
 	const body = scrollFrame({
 		Position = UDim2.fromOffset(0, 88),
 		Size = UDim2.new(1, 0, 1, -88),
 		Parent = detail,
 	})
-	const bodyText = make("TextLabel", {
+	const bodyText = make("TextBox", {
 		Position = UDim2.fromOffset(6, 4),
 		Size = UDim2.new(1, -12, 0, 0),
 		BackgroundTransparency = 1,
 		RichText = true,
 		Text = "",
+		ClearTextOnFocus = false,
+		MultiLine = true,
+		TextEditable = true,
 		Font = Enum.Font.Code,
 		TextSize = 13,
 		TextWrapped = true,
@@ -450,7 +456,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		TextYAlignment = Enum.TextYAlignment.Top,
 		TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
 		Parent = body,
-	}) :: TextLabel
+	}) :: TextBox
 	const function fitBody()
 		const height = bodyText.TextBounds.Y + 16
 		bodyText.Size = UDim2.new(1, -12, 0, height)
@@ -458,12 +464,49 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	end
 	bodyText:GetPropertyChangedSignal("TextBounds"):Connect(fitBody)
 	local bodyMarkup = ""
-	const function setBody(markup: string)
-		bodyMarkup = markup
-		bodyText.Text = Fmt.resolve(markup, isDarkTheme())
-		body.CanvasPosition = Vector2.zero
+	local bodyPlain = ""
+	local settingBody = false
+	const function renderBody()
+		settingBody = true
+		if bodyText:IsFocused() then
+			bodyText.RichText = false
+			bodyText.Text = bodyPlain
+		else
+			bodyText.RichText = true
+			bodyText.Text = Fmt.resolve(bodyMarkup, isDarkTheme())
+		end
+		settingBody = false
 		fitBody()
 	end
+	const function setBody(markup: string)
+		bodyMarkup = markup
+		bodyPlain = Fmt.strip(markup)
+		renderBody()
+		body.CanvasPosition = Vector2.zero
+	end
+	bodyText.Focused:Connect(renderBody)
+	bodyText.FocusLost:Connect(renderBody)
+	bodyText:GetPropertyChangedSignal("Text"):Connect(function()
+		if settingBody or not bodyText:IsFocused() or bodyText.Text == bodyPlain then
+			return
+		end
+		const cursor = bodyText.CursorPosition
+		settingBody = true
+		bodyText.Text = bodyPlain
+		bodyText.CursorPosition = math.min(cursor, #bodyPlain + 1)
+		settingBody = false
+	end)
+
+	-- 내부 구조: 파일을 누르면 내용을 본문에
+	const filesList = scrollFrame({
+		Visible = false,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Position = UDim2.fromOffset(0, 88),
+		Size = UDim2.new(1, 0, 1, -88),
+		Parent = detail,
+	})
+	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = filesList })
+	make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingTop = UDim.new(0, 4), Parent = filesList })
 
 	-- 버전 고르기 목록 (버전 버튼 아래에 뜸)
 	const versionPopup = scrollFrame({
@@ -483,8 +526,10 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		selected: Details.Version?,
 		-- 고른 버전의 정보를 본문 글자로
 		info: (version: Details.Version) -> string,
-		files: ((version: Details.Version) -> { string })?,
-		showingFiles: boolean,
+		files: ((version: Details.Version) -> Details.Files)?,
+		-- info: 정보, files: 파일 목록, file: 파일 하나
+		mode: "info" | "files" | "file",
+		loaded: { version: Details.Version, files: Details.Files }?,
 	}
 	local view: View? = nil
 	local loadGeneration = 0
@@ -534,7 +579,9 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			return
 		end
 		current.selected = version
-		current.showingFiles = false
+		current.mode = "info"
+		filesList.Visible = false
+		body.Visible = true
 		versionText.Text = version.label
 		addExactText.Text = "Add " .. version.label
 		setSpec(configLine(viewId, version.spec))
@@ -604,23 +651,120 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		end
 	end)
 
-	-- 내부 구조 보기 <-> 정보 보기
+	-- 파일 하나 보기
+	const MAX_FILE_CHARS = 60000
+	const function openFile(current: View, files: Details.Files, path: string)
+		current.mode = "file"
+		filesList.Visible = false
+		body.Visible = true
+		Icons.set(filesIcon, "folder", false)
+		filesText.Text = "Files"
+		setBody(Fmt.color("dim", `{Fmt.escape(path)} 받는 중...`))
+		loadGeneration += 1
+		const mine = loadGeneration
+		task.spawn(function()
+			const ok, content = pcall(files.read, path)
+			if mine ~= loadGeneration or view ~= current then
+				return
+			end
+			const header = Fmt.color("yellow", Fmt.bold(Fmt.escape(path)))
+			if not ok then
+				setBody(header .. "\n" .. Fmt.color("red", "오류: " .. Fmt.escape(tostring(content))))
+			elseif string.find(content, "%z") or string.match(path, "%.rbxm$") then
+				setBody(header .. "\n" .. Fmt.color("dim", `(바이너리 파일, {#content} bytes)`))
+			else
+				local text = content
+				if #text > MAX_FILE_CHARS then
+					text = string.sub(text, 1, MAX_FILE_CHARS) .. `\n... ({#content} 글자 중 앞부분)`
+				end
+				setBody(header .. "\n" .. Fmt.escape(text))
+			end
+		end)
+	end
+
+	-- 파일 목록 보이기
+	const function showFiles(current: View, version: Details.Version, files: Details.Files)
+		current.mode = "files"
+		body.Visible = false
+		filesList.Visible = true
+		Icons.set(filesIcon, "file-box", false)
+		filesText.Text = "Info"
+		for _, child in filesList:GetChildren() do
+			if child:IsA("GuiObject") then
+				child:Destroy()
+			end
+		end
+		make("TextLabel", {
+			LayoutOrder = 0,
+			Size = UDim2.new(1, -6, 0, 20),
+			BackgroundTransparency = 1,
+			RichText = true,
+			Text = Fmt.resolve(
+				Fmt.color("yellow", Fmt.bold(`내부 구조 ({Fmt.escape(version.label)}, {#files.paths}개 파일, 눌러서 내용 보기)`)),
+				isDarkTheme()
+			),
+			Font = Enum.Font.Code,
+			TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+			TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
+			Parent = filesList,
+		})
+		for i, line in Details.pathTree(files.paths) do
+			const path = line.path
+			const item = make("TextButton", {
+				LayoutOrder = i,
+				Size = UDim2.new(1, -6, 0, 18),
+				BackgroundTransparency = 1,
+				AutoButtonColor = false,
+				RichText = true,
+				Text = Fmt.escape(line.text),
+				Font = Enum.Font.Code,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				TextColor3 = if path
+					then themeColor(Enum.StudioStyleGuideColor.MainText)
+					else themeColor(Enum.StudioStyleGuideColor.DimmedText),
+				Parent = filesList,
+			}) :: TextButton
+			if path then
+				item.MouseEnter:Connect(function()
+					item.Text = "<u>" .. Fmt.escape(line.text) .. "</u>"
+				end)
+				item.MouseLeave:Connect(function()
+					item.Text = Fmt.escape(line.text)
+				end)
+				item.Activated:Connect(function()
+					openFile(current, files, path)
+				end)
+			end
+		end
+		filesList.CanvasPosition = Vector2.zero
+	end
+
+	-- Files: 정보 -> 파일 목록 -> (파일) -> 파일 목록. 목록에서 다시 누르면 정보
 	filesButton.Activated:Connect(function()
 		const current = view
 		if not current or not current.selected or not current.files then
 			return
 		end
-		if current.showingFiles then
-			showVersion(current.selected)
+		const version = current.selected :: Details.Version
+		if current.mode == "files" then
+			showVersion(version)
 			return
 		end
-		current.showingFiles = true
+		const loaded = current.loaded
+		if loaded and loaded.version == version then
+			showFiles(current, version, loaded.files)
+			return
+		end
 		Icons.set(filesIcon, "file-box", false)
 		filesText.Text = "Info"
+		current.mode = "files"
 		setBody(Fmt.color("dim", "파일 목록을 받는 중..."))
 		loadGeneration += 1
 		const mine = loadGeneration
-		const version = current.selected
 		task.spawn(function()
 			const ok, result = pcall(current.files :: any, version)
 			if mine ~= loadGeneration or view ~= current then
@@ -630,11 +774,8 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 				setBody(Fmt.color("red", "오류: " .. Fmt.escape(tostring(result))))
 				return
 			end
-			const lines = { Fmt.color("yellow", Fmt.bold(`내부 구조 ({version.label}, {#result}개 파일)`)) }
-			for _, text in Details.pathTree(result) do
-				table.insert(lines, Fmt.escape(text))
-			end
-			setBody(table.concat(lines, "\n"))
+			current.loaded = { version = version, files = result }
+			showFiles(current, version, result)
 		end)
 	end)
 
@@ -643,6 +784,8 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		loadGeneration += 1
 		versionPopup.Visible = false
 		detail.Visible = false
+		filesList.Visible = false
+		body.Visible = true
 		list.Visible = true
 	end
 	backButton.Activated:Connect(closeDetail)
@@ -665,17 +808,22 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		task.spawn(function()
 			const ok, err = pcall(function()
 				const owner, name = string.match(result.id, "^([^/]+)/(.+)$")
-				if result.source == "wally" then
-					const data = Details.wally(owner :: string, name :: string)
+				if result.source == "wally" or result.source == "pesde" then
+					const isPesde = result.source == "pesde"
+					const data = if isPesde
+						then Details.pesde(owner :: string, name :: string)
+						else Details.wally(owner :: string, name :: string)
 					const newView: View = {
 						versions = data.versions,
 						info = function(version)
 							return infoMarkup(data.info(version))
 						end,
 						files = function(version)
-							return Details.wallyFiles(owner :: string, name :: string, version.label)
+							return if isPesde
+								then Details.pesdeFiles(owner :: string, name :: string, version.label)
+								else Details.wallyFiles(owner :: string, name :: string, version.label)
 						end,
-						showingFiles = false,
+						mode = "info",
 					}
 					if mine ~= loadGeneration then
 						return
@@ -700,7 +848,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 						files = function(version)
 							return Details.githubFiles(owner :: string, name :: string, version)
 						end,
-						showingFiles = false,
+						mode = "info",
 					}
 					if mine ~= loadGeneration then
 						return
@@ -766,7 +914,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			Position = UDim2.fromOffset(6, 22),
 			Size = UDim2.new(1, -80, 0, 32),
 			BackgroundTransparency = 1,
-			Text = (if result.source == "github" then "[GitHub] " else "[Wally] ")
+			Text = (if result.source == "github" then "[GitHub] " elseif result.source == "pesde" then "[pesde] " else "[Wally] ")
 				.. (if result.description ~= "" then result.description else "(설명 없음)"),
 			Font = Enum.Font.SourceSans,
 			TextSize = 14,
@@ -813,7 +961,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	local generation = 0
 	const function runSearch()
 		const text = string.match(query.Text, "^%s*(.-)%s*$") :: string
-		if not current.wally and not current.github then
+		if not current.wally and not current.pesde and not current.github then
 			status.Text = "검색할 곳을 하나 이상 선택해주세요"
 			return
 		end
@@ -826,7 +974,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			const options = { author = current.author, luauOnly = current.luauOnly }
 			const results: { Search.Result } = {}
 			const errors = {}
-			for _, source in { "wally", "github" } do
+			for _, source in { "wally", "pesde", "github" } do
 				if (current :: any)[source] then
 					const ok, found = pcall((Search :: any)[source], text, options)
 					if ok then
@@ -861,7 +1009,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		list.BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.ScriptBackground)
 		body.BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.ScriptBackground)
 		bodyText.TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText)
-		bodyText.Text = Fmt.resolve(bodyMarkup, isDarkTheme())
+		renderBody()
 	end)
 
 	root.Parent = widget

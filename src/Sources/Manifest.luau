@@ -38,6 +38,9 @@ const function pesdeDependencyToSpec(alias: string, dep: any): string?
 		-- "wally#scope/name" 또는 "scope/name"
 		const name = string.gsub(dep.wally, "^.-#", "")
 		return if versionText then `{name}@{versionText}` else name
+	elseif type(dep.name) == "string" then
+		-- pesde 레지스트리 패키지 ("scope/name")
+		return if versionText then `pesde:{dep.name}@{versionText}` else `pesde:{dep.name}`
 	elseif type(dep.repo) == "string" then
 		local owner, repo = string.match(dep.repo, "github%.com[/:]([^/]+)/([^/%.]+)")
 		if not owner then
@@ -52,7 +55,7 @@ const function pesdeDependencyToSpec(alias: string, dep: any): string?
 		end
 	end
 
-	Log.warn(`pesde 의존성 '{alias}' 는 지원하지 않는 형식이라 건너뜀 (pesde 레지스트리 / GitHub 외 Git)`)
+	Log.warn(`pesde 의존성 '{alias}' 는 지원하지 않는 형식이라 건너뜀 (GitHub 외 Git 등)`)
 	return nil
 end
 

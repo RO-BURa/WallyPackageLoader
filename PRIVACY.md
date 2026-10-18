@@ -27,7 +27,7 @@ The plugin only talks to these services (the same domains Roblox Studio asks you
 | `github.com` | OAuth Device Flow requests | `login` |
 | `api.github.com` | Your token (Authorization header) | `login`, `whoami`, GitHub packages (`gh:`) while logged in |
 | `api.wally.run` | Your token (Authorization header) and the package you upload | `publish --yes` only |
-| `api.wally.run`, `codeload.github.com`, `raw.githubusercontent.com` | Package names and versions (no token) | `add`, `install`, `login` |
+| `api.wally.run`, `registry.pesde.daimond113.com`, `codeload.github.com`, `raw.githubusercontent.com` | Package names, versions and search words (no token) | `add`, `install`, `tree`, search window, `login` |
 
 Nothing is sent to the plugin author or to any other third party. Every HTTP destination must first be approved by you in Roblox Studio's plugin permission prompt.
 
