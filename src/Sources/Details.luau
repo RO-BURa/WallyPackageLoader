@@ -6,6 +6,7 @@ const Semver = require(script.Parent.Parent.Util.Semver)
 const Toml = require(script.Parent.Parent.Util.Toml)
 const Zip = require(script.Parent.Parent.Util.Zip)
 const GitHub = require(script.Parent.GitHub)
+const Pesde = require(script.Parent.Pesde)
 
 -- 고를 수 있는 버전 하나
 export type Version = {
@@ -136,16 +137,95 @@ function Details.wally(scope: string, name: string): { versions: { Version }, in
 	}
 end
 
--- 패키지 안의 파일 목록 (zip 을 받아서)
-function Details.wallyFiles(scope: string, name: string, version: string): { string }
-	const url = `{WALLY_API}/v1/package-contents/{string.lower(scope)}/{string.lower(name)}/{version}`
-	const files = Zip.extract(Http.get(url, WALLY_HEADERS))
+-- 파일 목록 + 내용 읽기
+export type Files = {
+	paths: { string },
+	read: (path: string) -> string,
+}
+
+-- 이미 받은 파일들 (경로 -> 내용) 로
+const function filesFromMap(files: { [string]: string }): Files
 	const paths = {}
 	for path in files do
 		table.insert(paths, path)
 	end
 	table.sort(paths)
-	return paths
+	return {
+		paths = paths,
+		read = function(path)
+			return files[path] or ""
+		end,
+	}
+end
+
+-- 패키지 안의 파일 (zip 을 받아서)
+function Details.wallyFiles(scope: string, name: string, version: string): Files
+	const url = `{WALLY_API}/v1/package-contents/{string.lower(scope)}/{string.lower(name)}/{version}`
+	return filesFromMap(Zip.extract(Http.get(url, WALLY_HEADERS)))
+end
+
+--------------------------------------------------------------------------------
+-- pesde
+
+function Details.pesde(scope: string, name: string): { versions: { Version }, info: (Version) -> Info }
+	const lowerScope, lowerName = string.lower(scope), string.lower(name)
+	const metadata = Pesde.metadata(lowerScope, lowerName)
+	const byVersion = if type(metadata) == "table" and type(metadata.versions) == "table" then metadata.versions else {}
+	const labels = {}
+	for label, info in byVersion do
+		if Pesde.robloxTarget(info) then
+			table.insert(labels, label)
+		end
+	end
+	const versions: { Version } = {}
+	for _, label in sortVersions(labels) do
+		table.insert(versions, {
+			label = label,
+			spec = `pesde:{lowerScope}/{lowerName}@{label}`,
+			rangeSpec = `pesde:{lowerScope}/{lowerName}@^{label}`,
+			prerelease = isPrerelease(label),
+		})
+	end
+
+	return {
+		versions = versions,
+		info = function(version: Version): Info
+			const versionInfo = byVersion[version.label] or {}
+			const kind, target = Pesde.robloxTarget(versionInfo)
+			const inner = target or {}
+			const fields = {}
+			const function field(title: string, value: string?)
+				if value then
+					table.insert(fields, { title, value })
+				end
+			end
+			field("설명", list(versionInfo.description))
+			field("target", kind)
+			field("license", list(inner.license))
+			field("authors", list(inner.authors))
+			field("repository", list(inner.repository))
+			field("올린 날", if type(inner.published_at) == "string" then string.sub(inner.published_at, 1, 10) else nil)
+			if type(metadata) == "table" and type(metadata.deprecated) == "string" and metadata.deprecated ~= "" then
+				field("deprecated", metadata.deprecated)
+			end
+			return {
+				fields = fields,
+				dependencies = Pesde.dependencySpecs(inner.dependencies),
+				serverDependencies = {},
+			}
+		end,
+	}
+end
+
+-- 패키지 안의 파일 (.tar.gz 를 받아서)
+function Details.pesdeFiles(scope: string, name: string, version: string): Files
+	const metadata = Pesde.metadata(scope, name)
+	const versionInfo = if type(metadata) == "table" and type(metadata.versions) == "table" then metadata.versions[version] else nil
+	const kind = Pesde.robloxTarget(versionInfo)
+	if not kind then
+		error("Roblox 용 target 이 없음", 0)
+	end
+	return filesFromMap(Pesde.download(Pesde.archiveUrl(scope, name, version, kind :: string)))
 end
 
 --------------------------------------------------------------------------------
@@ -290,8 +370,8 @@ function Details.githubInfo(owner: string, repo: string, version: Version): Info
 	}
 end
 
--- 저장소 파일 목록 (git tree)
-function Details.githubFiles(owner: string, repo: string, version: Version): { string }
+-- 저장소 파일 (목록은 git tree, 내용은 누를 때 raw 로 받음)
+function Details.githubFiles(owner: string, repo: string, version: Version): Files
 	const data = Http.getJson(
 		`{GITHUB_API}/repos/{owner}/{repo}/git/trees/{refOf(version)}?recursive=1`,
 		Auth.githubHeaders()
@@ -303,17 +383,25 @@ function Details.githubFiles(owner: string, repo: string, version: Version): { s
 		end
 	end
 	table.sort(paths)
-	return paths
+	const ref = refOf(version)
+	return {
+		paths = paths,
+		read = function(path)
+			return Http.get(`{RAW}/{owner}/{repo}/{ref}/{path}`)
+		end,
+	}
 end
 
--- 경로 목록 -> 들여쓴 트리 줄
-function Details.pathTree(paths: { string }, limit: number?): { string }
-	const lines = {}
+-- 경로 목록 -> 들여쓴 트리 줄 (파일 줄에는 path, 폴더 줄은 nil)
+export type TreeLine = { text: string, path: string? }
+
+function Details.pathTree(paths: { string }, limit: number?): { TreeLine }
+	const lines: { TreeLine } = {}
 	const shownDirs: { [string]: boolean } = {}
-	const max = limit or 300
+	const max = limit or 500
 	for _, path in paths do
 		if #lines >= max then
-			table.insert(lines, `... ({#paths} 개 중 일부)`)
+			table.insert(lines, { text = `... ({#paths} 개 중 일부)` })
 			break
 		end
 		const parts = string.split(path, "/")
@@ -322,10 +410,10 @@ function Details.pathTree(paths: { string }, limit: number?): { string }
 			dir ..= parts[i] .. "/"
 			if not shownDirs[dir] then
 				shownDirs[dir] = true
-				table.insert(lines, string.rep("  ", i - 1) .. parts[i] .. "/")
+				table.insert(lines, { text = string.rep("  ", i - 1) .. parts[i] .. "/" })
 			end
 		end
-		table.insert(lines, string.rep("  ", #parts - 1) .. parts[#parts])
+		table.insert(lines, { text = string.rep("  ", #parts - 1) .. parts[#parts], path = path })
 	end
 	return lines
 end

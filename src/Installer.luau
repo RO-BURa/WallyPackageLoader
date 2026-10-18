@@ -10,6 +10,7 @@ const Semver = require(script.Parent.Util.Semver)
 const Types = require(script.Parent.Sources.Types)
 const Wally = require(script.Parent.Sources.Wally)
 const GitHub = require(script.Parent.Sources.GitHub)
+const Pesde = require(script.Parent.Sources.Pesde)
 const File = require(script.Parent.Sources.File)
 
 type Package = Types.Package
@@ -29,7 +30,7 @@ function Installer.defaultAlias(package: Package): string
 end
 
 -- 스펙 문자열 -> 패키지
---   scope/name@range, wally:scope/name@range, gh:owner/repo@range, gh:owner/repo#ref
+--   scope/name@range, wally:scope/name@range, pesde:scope/name@range, gh:owner/repo@range, gh:owner/repo#ref
 function Installer.resolve(spec: string): Package
 	const trimmed = string.match(spec, "^%s*(.-)%s*$") :: string
 
@@ -43,6 +44,16 @@ function Installer.resolve(spec: string): Package
 			error(`잘못된 GitHub 스펙: {spec} (예: gh:owner/repo@^1.0)`, 0)
 		end
 		return GitHub.resolve(owner, repo, range, ref)
+	end
+
+	const pesde = string.match(trimmed, "^pesde:(.+)$")
+	if pesde then
+		const path, range = string.match(pesde, "^([^@]+)@(.+)$")
+		const scope, name = string.match(path or pesde, "^([%w_%-]+)/([%w_%-]+)$")
+		if not scope then
+			error(`잘못된 pesde 패키지: '{spec}' (예: pesde:scope/name@^1.0)`, 0)
+		end
+		return Pesde.resolve(scope, name, range)
 	end
 
 	const body = string.match(trimmed, "^wally:(.+)$") or trimmed
@@ -89,7 +100,9 @@ end
 -- root/_Index 에 패키지를 놓고 (엔트리 폴더, 패키지 Instance) 반환
 placePackage = function(context: Context, package: Package, root: Instance): (Instance, Instance)
 	const index = Linker.getIndex(root)
-	const entryName = Linker.entryName(package.scope, package.name, package.version)
+	-- pesde 는 같은 이름의 Wally 패키지와 겹치지 않게 앞에 pesde+
+	const entryName = (if package.source == "pesde" then "pesde+" else "")
+		.. Linker.entryName(package.scope, package.name, package.version)
 
 	const existing = index:FindFirstChild(entryName)
 	if existing then

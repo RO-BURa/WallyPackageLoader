@@ -1,14 +1,14 @@
 # WallyPackageLoader
 
 Roblox Studio 안에서 패키지를 바로 불러오는 플러그인입니다.
-`wally install` + Rojo 없이도 Wally / GitHub(pesde 방식) / 로컬 파일에서 패키지를 가져와
+`wally install` + Rojo 없이도 Wally / pesde / GitHub / 로컬 파일에서 패키지를 가져와
 Wally 와 같은 `_Index` 구조로 설치합니다.
 
 ## 기능
 - **Wally**: `sleitnick/signal@^2` 처럼 add 로 Config 에 추가하고 install 로 api.wally.run 에서 받아 설치 (의존성 재귀 설치)
 - **GitHub**: `gh:owner/repo@^1.0` (semver 태그), `gh:owner/repo#main` (브랜치/태그/커밋)
   - `wally.toml` 또는 `pesde.toml` 의 의존성도 같이 설치
-  - pesde 는 중앙 레지스트리를 없애고 Git 태그 기반으로 바뀌는 중이라 ([RFC #59](https://github.com/pesde-pkg/pesde/issues/59)) GitHub 소스를 지원
+- **pesde**: `pesde:scope/name@^1.0` (registry.pesde.daimond113.com). Roblox target (roblox / roblox_server) 이 있는 버전만, `.tar.gz` 를 받아 pesde.toml 의 `target.lib` 로 설치. pesde / Wally 의존성도 같이 설치
 - **파일에서 가져오기**: `.lua` / `.luau` (여러 개 한 번에 선택 가능), `.zip` (wally.toml 이 있으면 의존성도 설치)
   - 가져온 것은 `PackageLoaderConfig` 안의 `Imported` 폴더에 보관하고 Config 에 `이름 = script.Imported.이름` 으로 적은 뒤 설치
   - 일반 폴더는 Studio API 에 폴더 선택 기능이 없어서 zip 으로 압축해서 가져와야 함
@@ -88,12 +88,13 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 
 ### 검색 창
 툴바의 **Search** 버튼으로 엽니다. 검색어를 치고 Enter (또는 돋보기 버튼), 결과의 **Add** 로 Config 에 추가합니다 (설치는 Install All).
-- 검색할 곳: Wally, GitHub (여러 개 선택 가능). pesde 는 이 플러그인이 pesde 레지스트리 패키지를 아직 설치하지 못해서 비활성입니다.
+- 검색할 곳: Wally, pesde (Roblox 용만), GitHub (여러 개 선택 가능)
 - ⚙: 작성자 (Wally scope / GitHub 사용자) 로 좁히기, GitHub 은 Luau 저장소만
 - GitHub 검색은 저장소 이름 / 설명으로 찾습니다 (wally.toml 이 있는지는 안 봄). 로그인 안 하면 요청 한도가 낮습니다 (분당 10번)
 - 결과를 누르면 상세 화면: 버전 고르기, 버전별 설명 / realm / license / authors / 의존성, `Add <버전>` / `Add ^<버전>`, **Files** (내부 파일 구조)
   - GitHub: 별 개수 (로그인했으면 내가 눌렀는지), license, 마지막 push, wally.toml / pesde.toml 의존성, README 앞부분
-  - Wally 의 Files 는 패키지 zip 을 받아서 보여줍니다
+  - Files: 파일 목록, 파일을 누르면 내용. Wally / pesde 는 패키지를 받아서, GitHub 은 누른 파일만 받아서 보여줍니다
+  - 본문과 Config 줄 칸은 선택해서 복사할 수 있습니다
 - 아이콘은 Studio 에 들어 있는 Roblox Builder Icons 폰트를 씁니다
 
 ### 버튼
@@ -167,7 +168,7 @@ rojo build --plugin WallyPackageLoader.rbxm
 
 `v0.1.0` 같은 태그를 push 하면 GitHub Actions 가 `.rbxm` 을 빌드해서 Release 에 올립니다 (`.github/workflows/release.yml`).
 
-처음 사용할 때 Studio 가 HTTP 요청(api.wally.run, api.github.com, codeload.github.com, 로그인 시 github.com / raw.githubusercontent.com)과
+처음 사용할 때 Studio 가 HTTP 요청(api.wally.run, registry.pesde.daimond113.com, api.github.com, codeload.github.com, raw.githubusercontent.com, 로그인 시 github.com)과
 스크립트 삽입 권한을 물어봅니다.
 
 ## 구조
@@ -184,11 +185,11 @@ rojo build --plugin WallyPackageLoader.rbxm
 | `src/Http.luau` | HttpService 래퍼 |
 | `src/Auth.luau` | GitHub 로그인 (기기 로그인 / 토큰), 토큰 저장 |
 | `src/Publisher.luau` | Instance -> Wally 패키지 zip, 업로드 |
-| `src/Sources/` | Wally, GitHub, File, manifest(wally.toml / pesde.toml), Search(Wally / GitHub 검색) |
-| `src/Util/` | Inflate(deflate/gzip), Zip(읽기/쓰기), Crypto(SHA-256, PBKDF2, 토큰 암호화), Semver, Toml, Lexer, TypeExports, ConfigEditor, RojoValues(Rojo 속성 값), Vfs |
+| `src/Sources/` | Wally, pesde, GitHub, File, manifest(wally.toml / pesde.toml), Search(검색), Details(검색 상세 화면) |
+| `src/Util/` | Inflate(deflate/gzip), Zip(읽기/쓰기), Tar, Crypto(SHA-256, PBKDF2, 토큰 암호화), Semver, Toml, Lexer, TypeExports, ConfigEditor, RojoValues(Rojo 속성 값), Vfs |
 
 ## 아직 안 되는 것
-- pesde 레지스트리 패키지 (`name = "scope/name"` 형식 의존성), GitHub 외 Git 저장소
+- pesde 의 다른 index (기본 레지스트리만), GitHub 외 Git 저장소
 - `.rbxmx` (XML 모델) 는 `SerializationService` 가 읽을 수 있을 때만 됨
 - zip64, 암호화된 zip
 

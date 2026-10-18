@@ -5,7 +5,7 @@ const Vfs = require(script.Parent.Parent.Util.Vfs)
 export type Realm = "shared" | "server"
 
 export type Package = {
-	source: "wally" | "github" | "file",
+	source: "wally" | "github" | "pesde" | "file",
 	scope: string,
 	name: string,
 	-- 별칭을 안 적었을 때 쓸 이름 (없으면 name)
