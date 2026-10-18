@@ -24,6 +24,11 @@ function Icons.label(name: string, size: number, filled: boolean?, props: { [str
 	return label
 end
 
+-- RichText 글자 사이에 넣는 아이콘 (예: 별 + 숫자를 한 줄에)
+function Icons.rich(name: string, filled: boolean?): string
+	return `<font family="{FAMILY}" weight="{if filled then "bold" else "regular"}">{name}</font>`
+end
+
 -- 이미 만든 아이콘 라벨을 바꿈
 function Icons.set(label: TextLabel, name: string, filled: boolean?)
 	label.Text = name
