@@ -133,8 +133,6 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 
 	-- 줄마다 RichText 서식 (색은 Fmt 의 "$이름", 그릴 때 테마 색으로 바꿈)
 	const logLines: { string } = {}
-	-- 같은 줄이 입력한 명령이면 그 명령 (클릭하면 입력창에 다시 넣음), 아니면 false
-	const logCommands: { string | false } = {}
 	-- 선택 / 복사 중에는 서식 없는 글자로 보여줌 (복사했을 때 태그가 같이 안 딸려오게)
 	local plainText = ""
 	local settingText = false
@@ -190,19 +188,14 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	logLabel:GetPropertyChangedSignal("TextBounds"):Connect(applyHeight)
 	logFrame:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(render)
 
-	const function addLines(markup: string, command: string | false)
+	const function rich(markup: string)
 		for _, line in string.split(markup, "\n") do
 			table.insert(logLines, line)
-			table.insert(logCommands, command)
 		end
 		while #logLines > MAX_LOG_LINES do
 			table.remove(logLines, 1)
-			table.remove(logCommands, 1)
 		end
 		render()
-	end
-	const function rich(markup: string)
-		addLines(markup, false)
 	end
 	-- 일반 글자: "오류:", "완료:" 같은 라벨에 색
 	const function log(message: string)
@@ -212,13 +205,12 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		end
 		rich(table.concat(lines, "\n"))
 	end
-	-- 입력한 명령은 앞에 파란 원. reusable 이면 클릭해서 입력창에 다시 넣을 수 있음
-	const function logCommand(line: string, reusable: boolean?)
-		addLines(Fmt.color("blue", "●") .. " " .. Fmt.escape(line), if reusable then line else false)
+	-- 입력한 명령은 앞에 파란 원
+	const function logCommand(line: string)
+		rich(Fmt.color("blue", "●") .. " " .. Fmt.escape(line))
 	end
 	const function clear()
 		table.clear(logLines)
-		table.clear(logCommands)
 		followBottom = true
 		render()
 	end
@@ -235,25 +227,6 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		logLabel.Text = plainText
 		logLabel.CursorPosition = math.min(cursor, #plainText + 1)
 		settingText = false
-	end)
-	-- 입력한 명령 줄을 클릭하면 (드래그로 선택한 게 아니면) 그 명령을 입력창에 넣음
-	logLabel:GetPropertyChangedSignal("CursorPosition"):Connect(function()
-		if settingText then
-			return
-		end
-		task.defer(function()
-			const cursor = logLabel.CursorPosition
-			if not logLabel:IsFocused() or cursor < 1 or logLabel.SelectionStart ~= -1 then
-				return
-			end
-			const before = string.sub(plainText, 1, cursor - 1)
-			const _, newlines = string.gsub(before, "\n", "")
-			const command = logCommands[newlines + 1]
-			if command then
-				input.Text = command
-				input.CursorPosition = #command + 1
-			end
-		end)
 	end)
 
 	-- Studio 테마가 바뀌면 색 다시 칠함
@@ -351,9 +324,8 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		if string.match(line, "^%s*$") then
 			return
 		end
-		-- 토큰 / 비밀번호는 로그에 **** 로 (그 줄은 클릭해서 다시 쓸 수 없음)
+		-- 토큰 / 비밀번호는 로그에 **** 로
 		--   login <토큰>, --password <비밀번호>, --r <비밀번호>
-		local secret = false
 		const words = string.split((string.gsub(line, "^%s+", "")), " ")
 		const isLogin = string.lower(words[1] or "") == "login"
 		const shownWords = {}
@@ -361,16 +333,14 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			const previous = words[i - 1]
 			if previous == "--password" or previous == "--r" then
 				table.insert(shownWords, "****")
-				secret = true
 			elseif isLogin and i > 1 and word ~= "" and string.sub(word, 1, 2) ~= "--" then
 				table.insert(shownWords, "****")
-				secret = true
 			else
 				table.insert(shownWords, word)
 			end
 		end
 		input.Text = ""
-		logCommand(table.concat(shownWords, " "), not secret)
+		logCommand(table.concat(shownWords, " "))
 		-- cancel 은 다른 작업(로그인 대기)이 진행 중이어도 바로 실행
 		if string.lower((string.gsub(line, "^%s*(.-)%s*$", "%1"))) == "cancel" then
 			task.spawn(Commands.run, line, context)
