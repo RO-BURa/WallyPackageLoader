@@ -692,7 +692,7 @@ function Commands.help(context: Context, topic: string?)
 	end
 	nameRows(context, rows, 10)
 	context.rich("")
-	context.rich(Fmt.color("dim", Fmt.escape("help <명령어> 로 자세히, 로그의 ● 명령 줄을 누르면 입력창에 다시 들어감")))
+	context.rich(Fmt.color("dim", Fmt.escape("help <명령어> 로 자세히")))
 end
 
 function Commands.openConfig(context: Context)
