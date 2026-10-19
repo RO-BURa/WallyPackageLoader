@@ -482,4 +482,7 @@ function Config.pathOf(instance: Instance): string
 	return table.concat(parts, "/")
 end
 
+Config.DEFAULT_SHARED = DEFAULT_SHARED
+Config.DEFAULT_SERVER = DEFAULT_SERVER
+
 return Config

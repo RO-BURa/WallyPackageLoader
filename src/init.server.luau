@@ -19,6 +19,8 @@ const widget = plugin:CreateDockWidgetPluginGui(
 	DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Right, false, false, 320, 480, 260, 300)
 )
 widget.Title = "Package Loader"
+-- 자식이 부모 위에 그려지게 (버튼 안의 글자가 버튼 배경에 가려지지 않게)
+widget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 widget.Name = "WallyPackageLoader"
 
 toggleButton.Click:Connect(function()
@@ -39,6 +41,7 @@ const searchWidget = plugin:CreateDockWidgetPluginGui(
 	DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Right, false, false, 320, 480, 260, 300)
 )
 searchWidget.Title = "Package Search"
+searchWidget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 searchWidget.Name = "WallyPackageLoaderSearch"
 
 searchButton.Click:Connect(function()
