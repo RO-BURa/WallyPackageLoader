@@ -65,7 +65,7 @@ const function scanValue(tokens: { Token }, first: number): number
 		end
 		i += 1
 	end
-	error("ConfigEditor: 테이블이 닫히지 않음", 0)
+	error("ConfigEditor: table is not closed", 0)
 end
 
 parseTable = function(tokens: { Token }, open: number): Node
@@ -75,7 +75,7 @@ parseTable = function(tokens: { Token }, open: number): Node
 	while true do
 		const token = tokens[i]
 		if token == nil then
-			error("ConfigEditor: 테이블이 닫히지 않음", 0)
+			error("ConfigEditor: table is not closed", 0)
 		end
 		if isSymbol(token, "}") then
 			return { open = open, close = i, fields = fields }
@@ -94,7 +94,7 @@ parseTable = function(tokens: { Token }, open: number): Node
 
 		const valueLast = scanValue(tokens, valueFirst)
 		if valueLast < valueFirst then
-			error("ConfigEditor: 값이 비어 있음", 0)
+			error("ConfigEditor: value is empty", 0)
 		end
 
 		local node: Node? = nil
@@ -130,16 +130,16 @@ const function parseRoot(source: string): ({ Token }, Node)
 	for i = #tokens - 1, 1, -1 do
 		if tokens[i].kind == "name" and tokens[i].text == "return" then
 			if not isSymbol(tokens[i + 1], "{") then
-				error("ConfigEditor: return 다음이 테이블 생성자가 아님", 0)
+				error("ConfigEditor: return is not followed by a table constructor", 0)
 			end
 			const root = parseTable(tokens, i + 1)
 			if root.close ~= #tokens then
-				error("ConfigEditor: return 테이블 뒤에 다른 코드가 있음", 0)
+				error("ConfigEditor: there is other code after the returned table", 0)
 			end
 			return tokens, root
 		end
 	end
-	error("ConfigEditor: return 을 찾을 수 없음", 0)
+	error("ConfigEditor: return not found", 0)
 end
 
 const function findField(node: Node, key: string): Field?
@@ -242,7 +242,7 @@ function ConfigEditor.set(source: string, path: { string }, key: string, value: 
 			end)
 		end
 		if not field.node then
-			error(`ConfigEditor: '{segment}' 가 테이블이 아님`, 0)
+			error(`ConfigEditor: '{segment}' is not a table`, 0)
 		end
 		node = field.node :: Node
 	end

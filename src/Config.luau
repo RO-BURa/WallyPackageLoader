@@ -4,6 +4,7 @@
 
 const ServerStorage = game:GetService("ServerStorage")
 
+const L = require(script.Parent.Locale).L
 const ConfigEditor = require(script.Parent.Util.ConfigEditor)
 const LicenseText = require(script.Parent.LicenseText)
 
@@ -212,7 +213,7 @@ const function mapBack(value: Instance, mirror: Instance, original: Instance): I
 		target = target and target:FindFirstChild(name)
 	end
 	if not target then
-		error(`{CONFIG_NAME} 안에서 {table.concat(names, ".")} 을 찾을 수 없음`, 0)
+		error(L(`{CONFIG_NAME} 안에서 {table.concat(names, ".")} 을 찾을 수 없음`, `{table.concat(names, ".")} not found in {CONFIG_NAME}`), 0)
 	end
 	return target
 end
@@ -229,11 +230,11 @@ function Config.read(): Data
 	const ok, result = pcall(require, temp)
 	if not ok then
 		temp:Destroy()
-		error(`{CONFIG_NAME} 를 읽을 수 없음: {result}`, 0)
+		error(L(`{CONFIG_NAME} 를 읽을 수 없음: {result}`, `Could not read {CONFIG_NAME}: {result}`), 0)
 	end
 	if type(result) ~= "table" then
 		temp:Destroy()
-		error(`{CONFIG_NAME} 는 테이블을 return 해야 함`, 0)
+		error(L(`{CONFIG_NAME} 는 테이블을 return 해야 함`, `{CONFIG_NAME} must return a table`), 0)
 	end
 
 	const function source(value: any): Source?
@@ -296,13 +297,13 @@ const function edit(apply: (source: string) -> string)
 	const original = module.Source
 	const ok, result = pcall(apply, original)
 	if not ok then
-		error(`{CONFIG_NAME} 를 고칠 수 없어서 취소함: {result}`, 0)
+		error(L(`{CONFIG_NAME} 를 고칠 수 없어서 취소함: {result}`, `Could not edit {CONFIG_NAME}, nothing changed: {result}`), 0)
 	end
 	module.Source = result
 	const readOk, readError = pcall(Config.read)
 	if not readOk then
 		module.Source = original
-		error(`{CONFIG_NAME} 를 고친 결과를 읽을 수 없어서 취소함: {readError}`, 0)
+		error(L(`{CONFIG_NAME} 를 고친 결과를 읽을 수 없어서 취소함: {readError}`, `The edited {CONFIG_NAME} could not be read, nothing changed: {readError}`), 0)
 	end
 end
 
@@ -353,7 +354,7 @@ function Config.childExpression(instance: Instance): string
 		current = current.Parent
 	end
 	if current ~= module then
-		error(`{instance:GetFullName()} 은(는) {CONFIG_NAME} 안에 있지 않음`, 0)
+		error(L(`{instance:GetFullName()} 은(는) {CONFIG_NAME} 안에 있지 않음`, `{instance:GetFullName()} is not inside {CONFIG_NAME}`), 0)
 	end
 	local expression = "script"
 	for _, name in names do
@@ -446,7 +447,7 @@ function Config.resolvePath(path: string, create: boolean?): Instance?
 	const parts = string.split(Config.normalizePath(path), "/")
 	const ok, service = pcall(game.GetService, game, parts[1])
 	if not ok or not service then
-		error(`알 수 없는 서비스: {parts[1]}`, 0)
+		error(L(`알 수 없는 서비스: {parts[1]}`, `Unknown service: {parts[1]}`), 0)
 	end
 
 	local current: Instance = service
@@ -477,7 +478,7 @@ function Config.pathOf(instance: Instance): string
 		current = current.Parent
 	end
 	if current ~= game then
-		error(`{instance:GetFullName()} 은(는) DataModel 안에 있지 않음`, 0)
+		error(L(`{instance:GetFullName()} 은(는) DataModel 안에 있지 않음`, `{instance:GetFullName()} is not inside the DataModel`), 0)
 	end
 	return table.concat(parts, "/")
 end

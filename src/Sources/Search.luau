@@ -2,6 +2,7 @@
 
 const HttpService = game:GetService("HttpService")
 
+const L = require(script.Parent.Parent.Locale).L
 const Auth = require(script.Parent.Parent.Auth)
 const Http = require(script.Parent.Parent.Http)
 const Semver = require(script.Parent.Parent.Util.Semver)
@@ -50,7 +51,7 @@ function Search.wally(query: string, options: Options): { Result }
 	-- scope 만 적고 검색어가 비면 scope 로 검색
 	const text = if query ~= "" then query else (author or "")
 	if text == "" then
-		error("검색어를 입력해주세요", 0)
+		error(L("검색어를 입력해주세요", "Enter a search word"), 0)
 	end
 	const data = Http.getJson(
 		`{WALLY_API}/v1/package-search?query={HttpService:UrlEncode(text)}`,
@@ -83,7 +84,7 @@ function Search.pesde(query: string, options: Options): { Result }
 	const author = if options.author and options.author ~= "" then string.lower(options.author) else nil
 	const text = if query ~= "" then query else (author or "")
 	if text == "" then
-		error("검색어를 입력해주세요", 0)
+		error(L("검색어를 입력해주세요", "Enter a search word"), 0)
 	end
 	const data = Http.getJson(`{Pesde.API}/search?query={HttpService:UrlEncode(text)}`, nil, true)
 	const results: { Result } = {}
@@ -126,7 +127,7 @@ function Search.github(query: string, options: Options): { Result }
 		table.insert(parts, "language:Luau")
 	end
 	if #parts == 0 then
-		error("검색어를 입력해주세요", 0)
+		error(L("검색어를 입력해주세요", "Enter a search word"), 0)
 	end
 	const limit = math.clamp(options.limit or DEFAULT_LIMIT, 1, 100)
 	const data = Http.getJson(

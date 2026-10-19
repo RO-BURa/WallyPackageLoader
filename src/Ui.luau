@@ -3,6 +3,7 @@
 const Selection = game:GetService("Selection")
 const TextService = game:GetService("TextService")
 
+const L = require(script.Parent.Locale).L
 const Auth = require(script.Parent.Auth)
 const Commands = require(script.Parent.Commands)
 const Config = require(script.Parent.Config)
@@ -61,7 +62,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	const input = make("TextBox", {
 		LayoutOrder = 1,
 		Size = UDim2.new(1, 0, 0, 28),
-		PlaceholderText = "asdf = ro-bura/signal  (Enter 로 실행, help)",
+		PlaceholderText = L("asdf = ro-bura/signal  (Enter 로 실행, help)", "asdf = ro-bura/signal  (Enter to run, help)"),
 		Text = "",
 		ClearTextOnFocus = false,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -247,7 +248,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		log(prompt)
 		secretValue = ""
 		secretWaiter = coroutine.running()
-		input.PlaceholderText = "비밀번호 (가려짐)"
+		input.PlaceholderText = L("비밀번호 (가려짐)", "Password (hidden)")
 		input.Text = ""
 		task.defer(function()
 			input:CaptureFocus()
@@ -288,13 +289,13 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 
 	const function run(job: () -> ())
 		if busy then
-			log("이전 작업이 끝날 때까지 기다려주세요")
+			log(L("이전 작업이 끝날 때까지 기다려주세요", "Wait for the previous job to finish"))
 			return
 		end
 		busy = true
 		const ok, err = pcall(job)
 		if not ok then
-			log(`오류: {err}`)
+			log(L(`오류: {err}`, `Error: {err}`))
 		end
 		busy = false
 		refreshLoginButtons()
@@ -313,7 +314,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			input.Text = ""
 			masking = false
 			input.PlaceholderText = PLACEHOLDER
-			logCommand(if value == "" then "(취소)" else "(비밀번호 입력됨)")
+			logCommand(if value == "" then L("(취소)", "(cancelled)") else L("(비밀번호 입력됨)", "(password entered)"))
 			task.spawn(waiter, if value == "" then nil else value)
 			task.defer(function()
 				input:CaptureFocus()
@@ -398,7 +399,7 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	end)
 	addButton("Prune", function()
 		Installer.prune(log)
-		log("정리 완료")
+		log(L("정리 완료", "Prune done"))
 	end)
 	-- 선택한 곳(예: 방금 연 Config) 에 잘못 들어가지 않도록 버튼은 항상 shared 경로
 	addButton("Import File", function()
@@ -436,16 +437,16 @@ function Ui.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	root.Parent = widget
 
 	if Auth.hasSaved() then
-		log("저장된 GitHub 로그인이 있음. login --password <비밀번호> 로 풀기")
+		log(L("저장된 GitHub 로그인이 있음. login --password <비밀번호> 로 풀기", "A saved GitHub login exists. Unlock it with login --password <password>"))
 	end
 
 	const ok, data = pcall(Config.read)
 	if ok then
 		log(`shared: {data.shared}`)
 		log(`server: {data.server}`)
-		log("help 를 입력하면 명령어 목록이 나옴")
+		log(L("help 를 입력하면 명령어 목록이 나옴", "Type help for the list of commands"))
 	else
-		log(`오류: {data}`)
+		log(L(`오류: {data}`, `Error: {data}`))
 	end
 end
 

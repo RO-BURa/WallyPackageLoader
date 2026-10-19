@@ -3,6 +3,7 @@
 --   gh:owner/repo@^1.2      범위를 만족하는 가장 높은 태그 (v1.2.3 / 1.2.3)
 --   gh:owner/repo#main      브랜치, 태그, 커밋
 
+const L = require(script.Parent.Parent.Locale).L
 const Auth = require(script.Parent.Parent.Auth)
 const Http = require(script.Parent.Parent.Http)
 const Semver = require(script.Parent.Parent.Util.Semver)
@@ -61,7 +62,7 @@ function GitHub.resolve(owner: string, repo: string, rangeText: string?, ref: st
 			version = Semver.toString(candidates[index])
 			downloadRef = `refs/tags/{tagNames[index]}`
 		elseif rangeText then
-			error(`GitHub: {owner}/{repo}@{rangeText} 를 만족하는 태그가 없음`, 0)
+			error(L(`GitHub: {owner}/{repo}@{rangeText} 를 만족하는 태그가 없음`, `GitHub: no tag matches {owner}/{repo}@{rangeText}`), 0)
 		else
 			const info = Http.getJson(`{API}/repos/{owner}/{repo}`, Auth.githubHeaders())
 			version = sanitize(info.default_branch)

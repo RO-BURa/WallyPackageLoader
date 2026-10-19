@@ -11,7 +11,7 @@ end
 
 const function toNumber(value: any): number
 	if type(value) ~= "number" then
-		error(`숫자가 필요함: {value}`, 0)
+		error(`Number expected: {value}`, 0)
 	end
 	return value
 end

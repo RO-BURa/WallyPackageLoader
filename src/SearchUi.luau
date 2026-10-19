@@ -1,5 +1,6 @@
 -- 검색 창: Wally / GitHub 에서 패키지를 찾고, 눌러서 상세 정보 (버전 선택, 의존성, 내부 구조) 를 보고 Add
 
+const L = require(script.Parent.Locale).L
 const Auth = require(script.Parent.Auth)
 const Commands = require(script.Parent.Commands)
 const Config = require(script.Parent.Config)
@@ -65,7 +66,7 @@ end
 -- 별 아이콘 + 개수 (1개 이상이면 굵은 노란 별, 내가 눌렀으면 표시)
 const function starMarkup(stars: number, starredByMe: boolean): string
 	const icon = Icons.rich("star", stars > 0)
-	const text = `{icon} {stars}` .. (if starredByMe then " (내가 누름)" else "")
+	const text = `{icon} {stars}` .. (if starredByMe then L(" (내가 누름)", " (starred by you)") else "")
 	return if stars > 0 or starredByMe then Fmt.color("yellow", text) else Fmt.color("dim", text)
 end
 
@@ -214,7 +215,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	})
 	const query = inputBox({
 		Size = UDim2.new(1, -34, 1, 0),
-		PlaceholderText = "검색어 (Enter 로 검색)",
+		PlaceholderText = L("검색어 (Enter 로 검색)", "Search (Enter)"),
 		Parent = queryRow,
 	})
 	const searchButton = iconButton("magnifying-glass", "", {
@@ -304,7 +305,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		LayoutOrder = 1,
 		Size = UDim2.new(1, 0, 0, 26),
 		Text = current.author,
-		PlaceholderText = "작성자: Wally scope / GitHub 사용자 (비우면 전체)",
+		PlaceholderText = L("작성자: Wally scope / GitHub 사용자 (비우면 전체)", "Author: Wally scope / GitHub user (empty for all)"),
 		Parent = settingsPanel,
 	})
 	author.FocusLost:Connect(function()
@@ -320,7 +321,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	}, {
 		make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
-	toggle(githubOptions, 1, "GitHub: Luau 저장소만", function()
+	toggle(githubOptions, 1, L("GitHub: Luau 저장소만", "GitHub: Luau repositories only"), function()
 		return current.luauOnly
 	end, function(value)
 		current.luauOnly = value
@@ -377,14 +378,14 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		task.spawn(function()
 			const ok, err = pcall(Commands.add, spec, NO_FLAGS, addContext)
 			if ok then
-				status.Text = `Config 에 추가함: {spec} (설치는 Install All)`
+				status.Text = L(`Config 에 추가함: {spec} (설치는 Install All)`, `Added to the Config: {spec} (install with Install All)`)
 				configured = configuredPackages()
 				if button then
 					button.Text = "Added"
 				end
 			else
-				status.Text = `오류: {err}`
-				Log.write(`오류: {err}`)
+				status.Text = L(`오류: {err}`, `Error: {err}`)
+				Log.write(L(`오류: {err}`, `Error: {err}`))
 				if button then
 					button.Text = before
 				end
@@ -423,7 +424,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			SortOrder = Enum.SortOrder.LayoutOrder,
 		}),
 	})
-	const versionButton, _, versionText = iconButton("chevron-small-down", "버전", { LayoutOrder = 1, Parent = controls })
+	const versionButton, _, versionText = iconButton("chevron-small-down", L("버전", "Version"), { LayoutOrder = 1, Parent = controls })
 	const addExact, _, addExactText = iconButton("plus-small", "Add", { LayoutOrder = 2, Parent = controls })
 	const addRange, _, addRangeText = iconButton("plus-small", "Add ^", { LayoutOrder = 3, Parent = controls })
 	const filesButton, filesIcon, filesText = iconButton("folder", "Files", { LayoutOrder = 4, Parent = controls })
@@ -585,7 +586,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		table.insert(lines, "")
 		table.insert(lines, Fmt.color("yellow", Fmt.bold(heading)))
 		if #keys == 0 then
-			table.insert(lines, Fmt.color("dim", "  (없음)"))
+			table.insert(lines, Fmt.color("dim", L("  (없음)", "  (none)")))
 		end
 		for _, key in keys do
 			table.insert(lines, "  " .. Fmt.bold(Fmt.escape(key)) .. "  " .. Fmt.color("dim", Fmt.escape(tostring(map[key]))))
@@ -597,11 +598,11 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			table.insert(lines, line(field[1], field[2]))
 		end
 		if info.warning then
-			table.insert(lines, Fmt.color("yellow", "경고: " .. Fmt.escape(info.warning)))
+			table.insert(lines, Fmt.color("yellow", L("경고: ", "Warning: ") .. Fmt.escape(info.warning)))
 		end
-		dependencyLines(lines, "의존성", info.dependencies)
+		dependencyLines(lines, L("의존성", "Dependencies"), info.dependencies)
 		if next(info.serverDependencies) then
-			dependencyLines(lines, "server 의존성", info.serverDependencies)
+			dependencyLines(lines, L("server 의존성", "Server dependencies"), info.serverDependencies)
 		end
 		if info.extra then
 			table.insert(lines, "")
@@ -632,13 +633,13 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			else "Add ^"
 		Icons.set(filesIcon, "folder", false)
 		filesText.Text = "Files"
-		setBody(Fmt.color("dim", "불러오는 중..."))
+		setBody(Fmt.color("dim", L("불러오는 중...", "Loading...")))
 		loadGeneration += 1
 		const mine = loadGeneration
 		task.spawn(function()
 			const ok, result = pcall(current.info, version)
 			if mine == loadGeneration and view == current then
-				setBody(if ok then result else Fmt.color("red", "오류: " .. Fmt.escape(tostring(result))))
+				setBody(if ok then result else Fmt.color("red", L("오류: ", "Error: ") .. Fmt.escape(tostring(result))))
 			end
 		end)
 	end
@@ -701,7 +702,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		body.Visible = true
 		Icons.set(filesIcon, "chevron-large-left", false)
 		filesText.Text = "Back to Files"
-		setBody(Fmt.color("dim", `{Fmt.escape(path)} 받는 중...`))
+		setBody(Fmt.color("dim", L(`{Fmt.escape(path)} 받는 중...`, `Fetching {Fmt.escape(path)}...`)))
 		loadGeneration += 1
 		const mine = loadGeneration
 		task.spawn(function()
@@ -711,13 +712,13 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			end
 			const header = Fmt.color("yellow", Fmt.bold(Fmt.escape(path)))
 			if not ok then
-				setBody(header .. "\n" .. Fmt.color("red", "오류: " .. Fmt.escape(tostring(content))))
+				setBody(header .. "\n" .. Fmt.color("red", L("오류: ", "Error: ") .. Fmt.escape(tostring(content))))
 			elseif string.find(content, "%z") or string.match(path, "%.rbxm$") then
-				setBody(header .. "\n" .. Fmt.color("dim", `(바이너리 파일, {#content} bytes)`))
+				setBody(header .. "\n" .. Fmt.color("dim", L(`(바이너리 파일, {#content} bytes)`, `(binary file, {#content} bytes)`)))
 			else
 				local text = content
 				if #text > MAX_FILE_CHARS then
-					text = string.sub(text, 1, MAX_FILE_CHARS) .. `\n... ({#content} 글자 중 앞부분)`
+					text = string.sub(text, 1, MAX_FILE_CHARS) .. L(`\n... ({#content} 글자 중 앞부분)`, `\n... (first part of {#content} characters)`)
 				end
 				setBody(header .. "\n" .. Fmt.escape(text))
 			end
@@ -742,7 +743,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			BackgroundTransparency = 1,
 			RichText = true,
 			Text = Fmt.resolve(
-				Fmt.color("yellow", Fmt.bold(`내부 구조 ({Fmt.escape(version.label)}, {#files.paths}개 파일, 눌러서 내용 보기)`)),
+				Fmt.color("yellow", Fmt.bold(L(`내부 구조 ({Fmt.escape(version.label)}, {#files.paths}개 파일, 눌러서 내용 보기)`, `Files ({Fmt.escape(version.label)}, {#files.paths} files, click to view)`))),
 				isDarkTheme()
 			),
 			Font = Enum.Font.Code,
@@ -804,7 +805,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		Icons.set(filesIcon, "chevron-large-left", false)
 		filesText.Text = "Back to Info"
 		current.mode = "files"
-		setBody(Fmt.color("dim", "파일 목록을 받는 중..."))
+		setBody(Fmt.color("dim", L("파일 목록을 받는 중...", "Fetching the file list...")))
 		loadGeneration += 1
 		const mine = loadGeneration
 		task.spawn(function()
@@ -813,7 +814,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 				return
 			end
 			if not ok then
-				setBody(Fmt.color("red", "오류: " .. Fmt.escape(tostring(result))))
+				setBody(Fmt.color("red", L("오류: ", "Error: ") .. Fmt.escape(tostring(result))))
 				return
 			end
 			current.loaded = { version = version, files = result }
@@ -839,12 +840,12 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		versionPopup.Visible = false
 		addExact.Visible = false
 		addRange.Visible = false
-		versionText.Text = "버전"
+		versionText.Text = L("버전", "Version")
 		configured = configuredPackages()
 		viewId = result.id
 		setSpec(configLine(result.id, result.spec))
 		title.Text = Fmt.resolve(Fmt.bold(Fmt.escape(result.id)), isDarkTheme())
-		setBody(Fmt.color("dim", "불러오는 중..."))
+		setBody(Fmt.color("dim", L("불러오는 중...", "Loading...")))
 		loadGeneration += 1
 		const mine = loadGeneration
 
@@ -901,13 +902,13 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 				end
 				const newView = view :: View
 				if #newView.versions == 0 then
-					setBody(Fmt.color("yellow", "버전이 없음"))
+					setBody(Fmt.color("yellow", L("버전이 없음", "No versions")))
 					return
 				end
 				showVersion(Details.defaultVersion(newView.versions) :: Details.Version)
 			end)
 			if not ok and mine == loadGeneration then
-				setBody(Fmt.color("red", "오류: " .. Fmt.escape(tostring(err))))
+				setBody(Fmt.color("red", L("오류: ", "Error: ") .. Fmt.escape(tostring(err))))
 			end
 		end)
 	end
@@ -958,7 +959,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			Size = UDim2.new(1, -80, 0, 32),
 			BackgroundTransparency = 1,
 			Text = (if result.source == "github" then "[GitHub] " elseif result.source == "pesde" then "[pesde] " else "[Wally] ")
-				.. (if result.description ~= "" then result.description else "(설명 없음)"),
+				.. (if result.description ~= "" then result.description else L("(설명 없음)", "(no description)")),
 			Font = Enum.Font.SourceSans,
 			TextSize = 14,
 			TextWrapped = true,
@@ -1003,7 +1004,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	const function runSearch()
 		const text = string.match(query.Text, "^%s*(.-)%s*$") :: string
 		if not current.wally and not current.pesde and not current.github then
-			status.Text = "검색할 곳을 하나 이상 선택해주세요"
+			status.Text = L("검색할 곳을 하나 이상 선택해주세요", "Select at least one place to search")
 			return
 		end
 		generation += 1
@@ -1011,7 +1012,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		configured = configuredPackages()
 		closeDetail()
 		clearResults()
-		status.Text = "검색 중..."
+		status.Text = L("검색 중...", "Searching...")
 		task.spawn(function()
 			const options = { author = current.author, luauOnly = current.luauOnly }
 			const results: { Search.Result } = {}
@@ -1034,9 +1035,9 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			for i, result in results do
 				addRow(i, result)
 			end
-			status.Text = `{#results}개`
-				.. (if current.github and not Auth.getToken() then " (GitHub 은 로그인하면 요청 한도가 늘어남)" else "")
-				.. (if #errors > 0 then "  오류: " .. table.concat(errors, " / ") else "")
+			status.Text = L(`{#results}개`, `{#results} results`)
+				.. (if current.github and not Auth.getToken() then L(" (GitHub 은 로그인하면 요청 한도가 늘어남)", " (log in to raise the GitHub request limit)") else "")
+				.. (if #errors > 0 then L("  오류: ", "  Error: ") .. table.concat(errors, " / ") else "")
 		end)
 	end
 	query.FocusLost:Connect(function(enterPressed)

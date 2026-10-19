@@ -2,6 +2,8 @@
 
 const HttpService = game:GetService("HttpService")
 
+const L = require(script.Parent.Locale).L
+
 const Http = {}
 
 -- 오류 메시지에는 전체 주소 대신 서버 이름만
@@ -24,7 +26,7 @@ function Http.get(url: string, headers: { [string]: string }?, fresh: boolean?):
 		Headers = headers,
 	})
 	if not ok then
-		error(`HTTP 요청 실패 ({hostOf(url)}): {response}`, 0)
+		error(L(`HTTP 요청 실패 ({hostOf(url)}): {response}`, `HTTP request failed ({hostOf(url)}): {response}`), 0)
 	end
 	if not response.Success then
 		error(`HTTP {response.StatusCode} {response.StatusMessage} ({hostOf(url)})`, 0)
@@ -47,7 +49,7 @@ function Http.post(url: string, body: string, headers: { [string]: string }?): s
 		Body = body,
 	})
 	if not ok then
-		error(`HTTP 요청 실패 ({hostOf(url)}): {response}`, 0)
+		error(L(`HTTP 요청 실패 ({hostOf(url)}): {response}`, `HTTP request failed ({hostOf(url)}): {response}`), 0)
 	end
 	if not response.Success then
 		const detail = if response.Body and response.Body ~= "" then `\n{string.sub(response.Body, 1, 500)}` else ""

@@ -5,6 +5,7 @@
 --   기기 로그인: wally login 과 같은 GitHub Device Flow (Wally 의 OAuth 앱) -> Wally 업로드 + GitHub 요청 한도
 --   토큰 입력: 직접 만든 토큰 -> GitHub 요청 한도만 (Wally 서버는 Wally 앱 토큰만 받음)
 
+const L = require(script.Parent.Locale).L
 const Crypto = require(script.Parent.Util.Crypto)
 const Http = require(script.Parent.Http)
 
@@ -70,10 +71,10 @@ end
 -- 지금 토큰을 비밀번호로 암호화해서 저장. 걸린 시간(초) 반환
 function Auth.save(password: string): number
 	if not memoryToken or not memoryKind then
-		error("로그인 안 됨 (login)", 0)
+		error(L("로그인 안 됨 (login)", "Not logged in (login)"), 0)
 	end
 	if #password < Auth.MIN_PASSWORD_LENGTH then
-		error(`비밀번호는 {Auth.MIN_PASSWORD_LENGTH}자 이상`, 0)
+		error(L(`비밀번호는 {Auth.MIN_PASSWORD_LENGTH}자 이상`, `Password must be at least {Auth.MIN_PASSWORD_LENGTH} characters`), 0)
 	end
 	const started = os.clock()
 	const sealed = Crypto.seal(`{memoryKind}:{memoryToken}`, password, Auth.KDF.seconds, Auth.KDF.minIterations)
@@ -85,16 +86,16 @@ end
 function Auth.unlock(password: string): number
 	const sealed = setting(SEALED_SETTING)
 	if type(sealed) ~= "table" then
-		error("저장된 로그인이 없음 (login --agree --remember)", 0)
+		error(L("저장된 로그인이 없음 (login --agree --remember)", "No saved login (login --agree --remember)"), 0)
 	end
 	const started = os.clock()
 	const plain = Crypto.open(sealed, password)
 	if not plain then
-		error("비밀번호가 틀림", 0)
+		error(L("비밀번호가 틀림", "Wrong password"), 0)
 	end
 	const kind, token = string.match(plain, "^(%a+):(.+)$")
 	if (kind ~= "device" and kind ~= "token") or not token then
-		error("저장된 로그인이 망가짐. logout 후 다시 login 해주세요", 0)
+		error(L("저장된 로그인이 망가짐. logout 후 다시 login 해주세요", "Saved login is corrupted. Run logout, then login again"), 0)
 	end
 	memoryToken = token
 	memoryKind = kind :: Kind
@@ -123,7 +124,7 @@ end
 function Auth.whoami(): string
 	const headers = Auth.githubHeaders()
 	if not headers then
-		error(if Auth.hasSaved() then "저장된 로그인이 잠겨 있음 (login --password <비밀번호>)" else "로그인 안 됨 (login)", 0)
+		error(if Auth.hasSaved() then L("저장된 로그인이 잠겨 있음 (login --password <비밀번호>)", "Saved login is locked (login --password <password>)") else L("로그인 안 됨 (login)", "Not logged in (login)"), 0)
 	end
 	const info = Http.getJson("https://api.github.com/user", headers, true)
 	return info.login
@@ -159,20 +160,20 @@ const function waitOrCancel(seconds: number)
 	local waited = 0
 	while waited < seconds do
 		if cancelRequested then
-			error("GitHub 로그인 취소됨", 0)
+			error(L("GitHub 로그인 취소됨", "GitHub login cancelled"), 0)
 		end
 		task.wait(1)
 		waited += 1
 	end
 	if cancelRequested then
-		error("GitHub 로그인 취소됨", 0)
+		error(L("GitHub 로그인 취소됨", "GitHub login cancelled"), 0)
 	end
 end
 
 -- GitHub 기기 로그인. 코드를 보여주고 승인될 때까지 기다림 (cancel 로 취소)
 function Auth.deviceLogin(log: (string) -> ())
 	if loginInProgress then
-		error("이미 로그인을 기다리는 중 (cancel 로 취소)", 0)
+		error(L("이미 로그인을 기다리는 중 (cancel 로 취소)", "Already waiting for a login (cancel to stop)"), 0)
 	end
 	loginInProgress = true
 	cancelRequested = false
@@ -183,12 +184,12 @@ function Auth.deviceLogin(log: (string) -> ())
 			scope = "read:user",
 		})
 		if type(device) ~= "table" or not device.device_code then
-			error("GitHub 기기 로그인을 시작할 수 없음", 0)
+			error(L("GitHub 기기 로그인을 시작할 수 없음", "Could not start GitHub device login"), 0)
 		end
 
-		log(`1. 브라우저에서 {device.verification_uri} 열기`)
-		log(`2. 코드 입력: {device.user_code}`)
-		log("승인될 때까지 기다리는 중... (취소: cancel)")
+		log(L(`1. 브라우저에서 {device.verification_uri} 열기`, `1. Open {device.verification_uri} in a browser`))
+		log(L(`2. 코드 입력: {device.user_code}`, `2. Enter the code: {device.user_code}`))
+		log(L("승인될 때까지 기다리는 중... (취소: cancel)", "Waiting for approval... (cancel to stop)"))
 
 		local interval = device.interval or 5
 		const deadline = os.time() + (device.expires_in or 900)
@@ -205,10 +206,10 @@ function Auth.deviceLogin(log: (string) -> ())
 			elseif result.error == "slow_down" then
 				interval += 5
 			elseif result.error ~= "authorization_pending" then
-				error(`GitHub 로그인 실패: {result.error_description or result.error}`, 0)
+				error(L(`GitHub 로그인 실패: {result.error_description or result.error}`, `GitHub login failed: {result.error_description or result.error}`), 0)
 			end
 		end
-		error("GitHub 로그인 시간이 지남. 다시 login 해주세요", 0)
+		error(L("GitHub 로그인 시간이 지남. 다시 login 해주세요", "GitHub login timed out. Run login again"), 0)
 	end)
 	loginInProgress = false
 	cancelRequested = false

@@ -118,7 +118,7 @@ const function expandComparator(text: string, out: { Comparator })
 		end
 		const n = tonumber(part)
 		if not n then
-			error(`Semver: 잘못된 버전 범위 '{text}'`)
+			error(`Semver: invalid version range '{text}'`)
 		end
 		nums[i] = n
 	end
@@ -175,7 +175,7 @@ const function expandComparator(text: string, out: { Comparator })
 	elseif effectiveOp == ">" or effectiveOp == ">=" or effectiveOp == "<" or effectiveOp == "<=" then
 		table.insert(out, { op = effectiveOp, version = base })
 	else
-		error(`Semver: 알 수 없는 연산자 '{op}'`)
+		error(`Semver: unknown operator '{op}'`)
 	end
 end
 

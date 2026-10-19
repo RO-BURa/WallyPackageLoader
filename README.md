@@ -1,119 +1,123 @@
 # WallyPackageLoader
 
-Roblox Studio 안에서 패키지를 바로 불러오는 플러그인입니다.
-`wally install` + Rojo 없이도 Wally / pesde / GitHub / 로컬 파일에서 패키지를 가져와
-Wally 와 같은 `_Index` 구조로 설치합니다.
+English | [한국어](README.ko.md)
 
-## 기능
-- **Wally**: `sleitnick/signal@^2` 처럼 add 로 Config 에 추가하고 install 로 api.wally.run 에서 받아 설치 (의존성 재귀 설치)
-- **GitHub**: `gh:owner/repo@^1.0` (semver 태그), `gh:owner/repo#main` (브랜치/태그/커밋)
-  - `wally.toml` 또는 `pesde.toml` 의 의존성도 같이 설치
-- **pesde**: `pesde:scope/name@^1.0` (registry.pesde.daimond113.com). Roblox target (roblox / roblox_server) 이 있는 버전만, `.tar.gz` 를 받아 pesde.toml 의 `target.lib` 로 설치. pesde / Wally 의존성도 같이 설치
-- **파일에서 가져오기**: `.lua` / `.luau` (여러 개 한 번에 선택 가능), `.zip` (wally.toml 이 있으면 의존성도 설치)
-  - 가져온 것은 `PackageLoaderConfig` 안의 `Imported` 폴더에 보관하고 Config 에 `이름 = script.Imported.이름` 으로 적은 뒤 설치
-  - 일반 폴더는 Studio API 에 폴더 선택 기능이 없어서 zip 으로 압축해서 가져와야 함
-- **타입 re-export**: thunk 모듈이 패키지의 `export type` 을 다시 export 해서
-  `Packages.Signal.Signal<T>` 같은 타입을 바로 사용 가능 (pesde 링커와 같은 방식, `const` 가 있는 소스도 처리)
-- **Rojo 파일 형식**: 패키지 안의 `.model.json`, `*.meta.json` / `init.meta.json` (properties, attributes, className, Tags),
-  project.json 의 `$properties` / `$attributes`, `.rbxm` (`SerializationService`, 읽을 수 없으면 건너뜀) 지원
-- **정리**: 어디서도 쓰이지 않는 `_Index` 엔트리 삭제 (이 플러그인이 만든 것만, Rojo 로 동기화한 Wally 패키지는 건드리지 않음)
+A Roblox Studio plugin that loads packages right inside Studio.
+Without `wally install` or Rojo, it fetches packages from Wally / pesde / GitHub / local files
+and installs them in the same `_Index` layout Wally uses.
 
-## 사용법
-입력창에 명령을 치고 Enter 를 누르거나, 입력창에 패키지/경로를 적고 버튼을 누릅니다.
-로그는 플러그인 창에만 나오고 Output 창에는 찍지 않습니다. 오류/완료/경고 등은 색으로 구분합니다 (Studio 테마에 맞춤).
+The plugin speaks English and Korean. It follows the Studio language by default; change it with `lang en` / `lang ko` (`lang auto` to follow Studio again).
 
-### 명령어
+## Features
+- **Wally**: `add sleitnick/signal@^2` puts it in the Config, `install` downloads it from api.wally.run (dependencies are installed recursively)
+- **GitHub**: `gh:owner/repo@^1.0` (semver tags), `gh:owner/repo#main` (branch / tag / commit)
+  - Dependencies in `wally.toml` or `pesde.toml` are installed too
+- **pesde**: `pesde:scope/name@^1.0` (registry.pesde.daimond113.com). Only versions with a Roblox target (roblox / roblox_server); the `.tar.gz` is installed using `target.lib` from pesde.toml. pesde / Wally dependencies are installed too
+- **Import from files**: `.lua` / `.luau` (several at once), `.zip` (dependencies too if it has a wally.toml)
+  - Imported files are kept in the `Imported` folder inside `PackageLoaderConfig` and added to the Config as `Name = script.Imported.Name`
+  - Plain folders cannot be picked (Studio has no folder picker), so zip them first
+- **Type re-export**: thunks re-export the package's `export type`s, so types like `Packages.Signal.Signal<T>` just work (same approach as the pesde linker, handles sources using `const`)
+- **Rojo file formats**: `.model.json`, `*.meta.json` / `init.meta.json` (properties, attributes, className, Tags),
+  `$properties` / `$attributes` in project.json, `.rbxm` (`SerializationService`, skipped if unreadable)
+- **Prune**: removes `_Index` entries nothing uses (only ones this plugin made; Wally packages synced by Rojo are left alone)
+
+## Usage
+Type a command in the input box and press Enter, or type a package / path and press a button.
+Logs only go to the plugin window, never to the Output window. Errors / done / warnings are colored (matching the Studio theme).
+
+### Commands
 ```
-vide = cayasde/vide-opinionated       명령어 없이 치면 add
-add cayasde/vide-opinionated          Config 에 추가 (별칭은 원래 이름 vide-opinionated, 버전은 @0.4.3 으로 고정)
-add vide = cayasde/vide-opinionated@^0.4   별칭 vide (... as vide 도 됨)
-add <패키지> --server                 server 경로에 추가
-add <패키지> --selected               Explorer 에서 선택한 폴더에 추가
-add <패키지> --to ServerStorage/Libs  지정한 경로에 추가
-remove asdf  /  remove ro-bura/signal 별칭이나 패키지 이름으로 삭제 (rm 도 됨)
-install                               Config 대로 설치 (Config 에 없는 건 지우고 적힌 건 설치)
-import [--server | --selected | --to <경로>]   파일에서 가져오기
-import --select [--server | --to <경로>]      Explorer 에서 선택한 것을 복제해서 가져오기 (원본은 그대로)
-path shared <경로 | --selected>       shared 경로 설정
-path server <경로 | --selected>       server 경로 설정
-path reset [shared | server]          기본 경로로 되돌리기 (뒤에 없으면 둘 다, path shared --reset 도 됨)
-list                                  설치한 패키지 목록
-tree [--selected]                     의존성 트리 (Config 기준 / 선택한 wally.toml, thunk, 패키지 폴더 기준)
-prune                                 안 쓰는 _Index 폴더 정리
-config                                Config 스크립트 열기
-login --agree [--remember]            GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
-login --agree --password <비번> --r <비번>   로그인 + 비밀번호로 암호화해서 저장 (--r 은 확인용)
-login <토큰> --agree [--remember]     직접 만든 GitHub 토큰 (GitHub 요청 한도만)
-logout [--keep] / whoami              로그아웃 (저장된 것도 삭제, --keep 이면 남김) / 로그인한 계정
-login [--password <비번>]             저장한 로그인을 비밀번호로 풀기 (없으면 입력창에 * 로 가려서 받음)
-cancel                                기다리는 중인 GitHub 로그인 취소 (다른 작업 중에도 실행됨)
-publish [--yes | --no]                선택한 패키지를 Wally 에 업로드 (패키지 안의 wally.toml 사용)
-clear                                 로그 지우기
-license                               라이선스와 참고한 프로젝트 고지
-privacy / terms                       개인정보 처리 안내 / 이용 약관
-help [명령어]                         도움말 (help add 처럼 자세히)
+vide = cayasde/vide-opinionated       without a command it is add
+add cayasde/vide-opinionated          add to the Config (alias is the package name vide-opinionated, version pinned to @0.4.3)
+add vide = cayasde/vide-opinionated@^0.4   alias vide (... as vide works too)
+add <package> --server                add to the server path
+add <package> --selected              add to the folder selected in the Explorer
+add <package> --to ServerStorage/Libs add to the given path
+remove asdf  /  remove ro-bura/signal remove by alias or package name (rm works too)
+install                               install from the Config (removes what is not listed, installs what is)
+import [--server | --selected | --to <path>]   import from files
+import --select [--server | --to <path>]      copy what is selected in the Explorer (the original stays)
+path shared <path | --selected>       set the shared path
+path server <path | --selected>       set the server path
+path reset [shared | server]          back to the default path (both when nothing follows, path shared --reset works too)
+list                                  list installed packages
+tree [--selected]                     dependency tree (from the Config / from a selected wally.toml, thunk or package folder)
+prune                                 remove unused _Index folders
+config                                open the Config script
+login --agree [--remember]            GitHub device login (Wally publishing + higher GitHub request limit)
+login --agree --password <pw> --r <pw>   log in and save encrypted with a password (--r repeats it)
+login <token> --agree [--remember]    a GitHub token you made (only the GitHub request limit)
+logout [--keep] / whoami              log out (also deletes the saved token, --keep keeps it) / logged in account
+login [--password <pw>]               unlock the saved login (without --password, a hidden input box)
+cancel                                cancel a GitHub login that is waiting (runs even while busy)
+publish [--yes | --no]                publish the selected package to Wally (uses the wally.toml inside it)
+clear                                 clear the log
+lang [ko | en | auto]                 language (follows Studio by default)
+license                               license and notices for referenced projects
+privacy / terms                       privacy notice / terms of use
+help [command]                        help (help add for details)
 ```
-로그는 드래그해서 선택하고 복사할 수 있습니다 (고쳐도 바로 되돌아감).
-토큰 / 비밀번호가 들어간 명령은 로그에 `****` 로 가려집니다.
+You can drag to select and copy text in the log (edits are undone right away).
+Commands containing a token / password are shown as `****` in the log.
 
-`add` 는 `wally add` 처럼 Config 에만 적습니다. 실제 설치는 `install` (Install All 버튼) 로 합니다.
-버전을 안 적으면 찾은 버전으로 고정해서 적습니다 (`cayasde/vide-opinionated` -> `cayasde/vide-opinionated@0.4.3`).
+`add` only writes to the Config, like `wally add`. Installing is done by `install` (the Install All button).
+Without a version, the found version is pinned (`cayasde/vide-opinionated` -> `cayasde/vide-opinionated@0.4.3`).
 
-### GitHub 로그인 / Wally 업로드
-- 로그인은 명령어로만 합니다. 로그인하면 Logout / Prepare Publish 버튼이 나타납니다.
-- 토큰은 기본적으로 **메모리에만** 있고 Studio 를 끄면 사라집니다. 플레이스(Config 등)에는 어느 경우에도 들어가지 않습니다.
-- `--remember` 를 붙이면 로그인 후 비밀번호(10자 이상, 두 번)를 정하고, 토큰을 그 비밀번호로 **암호화해서** `plugin:SetSetting` 으로 이 컴퓨터에 저장합니다.
-  `login --agree --password <비번> --r <비번>` 으로 바로 적어도 됩니다 (`--r` 은 오타 확인용, 로그에는 `****`).
-  Studio 를 다시 켜면 `login --password <비번>` (또는 `login` 후 `*` 로 가려지는 입력창) 으로 풉니다. 저장된 로그인이 있으면 `login` 은 새로 로그인하지 않고 저장된 걸 풉니다. 새로 로그인하려면 `logout` 후 `login --agree`.
-  - 암호화: PBKDF2-HMAC-SHA256 (무작위 salt, 이 컴퓨터에서 약 1초 걸리는 반복 횟수, 최소 2만 번) + HMAC-SHA256 키스트림 + HMAC 태그
-  - 설정 파일을 누가 가져가도 비밀번호 없이는 못 씁니다. 다만 비밀번호가 짧거나 흔하면 무차별 대입으로 풀릴 수 있으니 길게 정해주세요.
-  - 비밀번호를 잊었으면 `logout` 후 다시 `login --agree --remember`.
-- `login <토큰>` 의 토큰은 로그에 `****` 로 가려집니다.
-- `login` 은 할 때마다 주의 사항을 보여주고, `privacy` / `terms` 를 읽고 동의한다는 뜻으로 `--agree` 를 붙여야 진행합니다.
-- `login --agree`: `wally login` 과 같은 GitHub 기기 로그인입니다 (Wally 의 GitHub OAuth 앱, `read:user` 권한).
-  나오는 주소(github.com/login/device)에서 코드를 입력하고 승인하면 됩니다.
-- `login <토큰> --agree`: 직접 만든 토큰 (권한 없이 만들어도 됨). GitHub API 요청 한도만 늘어납니다 (시간당 60 -> 5000).
-  Wally 서버는 Wally 앱으로 받은 토큰만 받기 때문에 업로드는 `login` 으로 해야 합니다.
-- `publish`: `wally publish` 처럼 패키지 안의 `wally.toml` 을 매니페스트로 씁니다.
-  1. Explorer 에서 패키지 (보통 ModuleScript) 를 선택하고 `publish` (Prepare Publish 버튼).
-     `wally.toml` 이 없으면 패키지 안에 `wally.toml` ModuleScript 를 만들어 열어줍니다. name / version / description / authors / 의존성 등을 채웁니다.
-     내용은 진짜 TOML 이라 기존 wally.toml 을 그대로 붙여넣어도 됩니다 (`return [==[ ... ]==]` 로 감싸도, 안 감싸도 됨).
-  2. 다시 `publish` 하면 올릴 파일과 `wally.toml` 을 미리보기로 보여줍니다.
-  3. `publish --yes` 로 방금 본 것을 업로드, `publish --no` 로 취소. 미리보기 뒤에 바뀌었으면 올리지 않고 다시 보여줍니다.
-  - `wally.toml` 스크립트는 업로드에서 빠지고 zip 의 `wally.toml` 파일이 됩니다.
-  - ModuleScript / Script / LocalScript -> `.luau`, Folder -> 폴더, StringValue -> `.txt`, 그 외 -> `.rbxm`
-  - Packages 의 thunk 를 선택하면 가리키는 진짜 모듈을 올립니다.
-  - 의존성은 Wally 패키지 (`scope/name@버전`) 만 됩니다. 코드에서는 `require(script.Parent.별칭)` 으로 부릅니다.
-    개발할 땐 패키지를 shared 경로 (`ReplicatedStorage/Packages`) 안에 두면 옆의 thunk 로 의존성이 바로 동작합니다.
-  - **같은 버전은 다시 올릴 수 없고, 올린 것은 지울 수 없습니다.**
+### GitHub login / publishing to Wally
+- Login is command only. Once logged in, the Logout / Prepare Publish buttons appear.
+- By default the token lives **only in memory** and is gone when Studio closes. It never goes into the place (Config etc.).
+- With `--remember`, you pick a password (10+ characters, typed twice) after logging in, and the token is saved **encrypted** with it on this computer via `plugin:SetSetting`.
+  You can also type it inline: `login --agree --password <pw> --r <pw>` (`--r` catches typos, shown as `****` in the log).
+  After restarting Studio, unlock it with `login --password <pw>` (or `login` and the hidden input box). With a saved login, `login` unlocks it instead of logging in again. To start over: `logout`, then `login --agree`.
+  - Encryption: PBKDF2-HMAC-SHA256 (random salt, as many iterations as take about 1 second on this computer, at least 20,000) + HMAC-SHA256 keystream + HMAC tag
+  - Whoever gets the settings file cannot use the token without the password. A short or common password can still be guessed, so pick a long one.
+  - Forgot the password? `logout`, then `login --agree --remember` again.
+- The token in `login <token>` is shown as `****` in the log.
+- `login` shows the warnings every time and only proceeds with `--agree`, meaning you read and agree to `privacy` / `terms`.
+- `login --agree`: the same GitHub device login as `wally login` (Wally's GitHub OAuth app, `read:user` scope).
+  Enter the code at the shown address (github.com/login/device) and approve.
+- `login <token> --agree`: a token you made (no scopes needed). Only raises the GitHub API request limit (60 -> 5000 per hour).
+  The Wally server only accepts tokens from the Wally app, so publish with `login`.
+- `publish`: like `wally publish`, it uses the `wally.toml` inside the package as the manifest.
+  1. Select the package (usually a ModuleScript) in the Explorer and run `publish` (Prepare Publish button).
+     Without a `wally.toml`, it creates a `wally.toml` ModuleScript inside the package and opens it. Fill in name / version / description / authors / dependencies.
+     It is real TOML, so you can paste an existing wally.toml (wrapping it in `return [==[ ... ]==]` is optional).
+  2. Run `publish` again to preview the files and the `wally.toml`.
+  3. `publish --yes` publishes what you just saw, `publish --no` cancels. If something changed after the preview, it shows the preview again instead.
+  - The `wally.toml` script is left out of the upload and becomes the `wally.toml` file in the zip.
+  - ModuleScript / Script / LocalScript -> `.luau`, Folder -> folder, StringValue -> `.txt`, anything else -> `.rbxm`
+  - Selecting a thunk in Packages publishes the real module it points to.
+  - Only Wally packages (`scope/name@version`) can be dependencies. Require them with `require(script.Parent.Alias)`.
+    While developing, keep the package inside the shared path (`ReplicatedStorage/Packages`) so the thunks next to it resolve dependencies.
+  - **The same version cannot be published twice, and published versions cannot be deleted.**
 
-### 검색 창
-툴바의 **Search** 버튼으로 엽니다. 검색어를 치고 Enter (또는 돋보기 버튼), 결과의 **Add** 로 Config 에 추가합니다 (설치는 Install All).
-- 검색할 곳: Wally, pesde (Roblox 용만), GitHub (여러 개 선택 가능)
-- Config 에 이미 있는 패키지는 Add 대신 Added 로 보입니다
-- ⚙: 작성자 (Wally scope / GitHub 사용자) 로 좁히기, GitHub 은 Luau 저장소만
-- GitHub 검색은 저장소 이름 / 설명으로 찾습니다 (wally.toml 이 있는지는 안 봄). 로그인 안 하면 요청 한도가 낮습니다 (분당 10번)
-- 결과를 누르면 상세 화면: 버전 고르기, 버전별 설명 / realm / license / authors / 의존성, `Add <버전>` / `Add ^<버전>`, **Files** (내부 파일 구조)
-  - GitHub: 별 개수 (로그인했으면 내가 눌렀는지), license, 마지막 push, wally.toml / pesde.toml 의존성, README 앞부분
-  - Files: 파일 목록, 파일을 누르면 내용 (Back to Info / Back to Files 로 돌아감). Wally / pesde 는 패키지를 받아서, GitHub 은 누른 파일만 받아서 보여줍니다
-  - 본문과 Config 줄 칸은 선택해서 복사할 수 있습니다
-- 아이콘은 Studio 에 들어 있는 Roblox Builder Icons 폰트를 씁니다
+### Search window
+Open it with the **Search** toolbar button. Type a search word and press Enter (or the magnifying glass), then **Add** a result to the Config (install with Install All).
+- Search in: Wally, pesde (Roblox packages only), GitHub (any combination)
+- Packages already in the Config show Added instead of Add
+- ⚙: narrow by author (Wally scope / GitHub user), GitHub Luau repositories only
+- GitHub search matches repository names / descriptions (it does not check for a wally.toml). Without login the request limit is low (10 per minute)
+- Click a result for details: pick a version; per version description / realm / license / authors / dependencies; `Add <version>` / `Add ^<version>`; **Files** (file list)
+  - GitHub: stars (starred by you when logged in), license, last push, wally.toml / pesde.toml dependencies, start of the README
+  - Files: click a file to view it (Back to Info / Back to Files to go back). Wally / pesde download the package, GitHub fetches only the clicked file
+  - The text and the Config line box can be selected and copied
+- Icons use the Roblox Builder Icons font that ships with Studio
 
-### 버튼
-| 버튼 | 동작 |
+### Buttons
+| Button | Action |
 |---|---|
-| Add / Add to Server / Add to Selected | 입력한 패키지를 Config 의 shared / server / 선택한 폴더 목록에 추가 (설치는 Install All) |
-| Remove | 입력한 별칭이나 패키지 삭제, 입력이 비어 있으면 Explorer 에서 선택한 패키지 삭제 |
-| Install All | Config 대로 설치. Config 에 없는 것 (플러그인이 만든 것만) 은 지움 (`wally install` 과 비슷) |
-| Prune | 안 쓰는 `_Index` 폴더 정리. Remove 할 때 자동으로 하므로 thunk 를 손으로 지웠을 때만 필요 |
-| Import File | 파일 선택 창. Config 아래에 보관하고 Config 에 추가한 뒤 shared 경로에 설치 (다른 곳은 `import --selected` / `--to`) |
-| Open Config | Config 스크립트 열기 |
-| Set Shared Path / Set Server Path | Explorer 에서 선택한 폴더(없으면 입력한 경로)로 설정 |
-| List / Help | 설치한 패키지 목록 / 명령어 도움말 |
-| Logout / Prepare Publish | **로그인했을 때만 보임.** 로그아웃 / 선택한 패키지에 `wally.toml` 을 만들거나 미리보기 (업로드는 `publish --yes`) |
+| Add / Add to Server / Add to Selected | Add the typed package to the Config under shared / server / the selected folder (install with Install All) |
+| Remove | Remove the typed alias or package; with an empty input, the package selected in the Explorer |
+| Install All | Install from the Config. Removes what is not listed (only things the plugin made), like `wally install` |
+| Prune | Remove unused `_Index` folders. Remove does this already, so it is only needed after deleting a thunk by hand |
+| Import File | File picker. Kept under the Config, added to it and installed to the shared path (elsewhere: `import --selected` / `--to`) |
+| Open Config | Open the Config script |
+| Set Shared Path / Set Server Path | Use the folder selected in the Explorer (or the typed path) |
+| List / Help | Installed packages / command help |
+| Logout / Prepare Publish | **Only while logged in.** Log out / create the `wally.toml` in the selected package or preview it (publish with `publish --yes`) |
 
-## 설정 (ServerStorage.PackageLoaderConfig)
-직접 고칠 수 있는 ModuleScript 이고 Team Create 로 공유됩니다. 직접 고친 뒤에는 **Install All** 을 누릅니다.
+## Config (ServerStorage.PackageLoaderConfig)
+A ModuleScript you can edit; it is shared through Team Create. After editing it by hand, press **Install All**.
 ```luau
 return {
 	shared = "ReplicatedStorage/Packages",
@@ -121,7 +125,7 @@ return {
 
 	dependencies = {
 		Signal = "sleitnick/signal@^2",
-		MyLib = script.Imported.MyLib,  -- 직접 가져온 것 (Import File)
+		MyLib = script.Imported.MyLib,  -- imported by hand (Import File)
 	},
 	serverDependencies = {},
 	custom = {
@@ -131,81 +135,80 @@ return {
 	},
 }
 ```
-- `shared` / `server` 는 경로 문자열(`"ReplicatedStorage/Packages"`, `"game/ReplicatedStorage/Packages"`) 이나
-  Instance (`game.ReplicatedStorage.Packages`) 둘 다 됩니다.
-- 값은 스펙 문자열 대신 Instance 도 됩니다 (`MyLib = script.MyLib`). 설치할 때 복사하므로 원본은 Config 아래에 그대로 남습니다.
-  ModuleScript 면 `_Index/custom_별칭` 에 복사하고 thunk 를 만들고, 그 외 (Folder 등) 는 설치 위치에 바로 복사합니다.
-- `install` 은 설치 위치에서 Config 에 없는 것 중 플러그인이 만든 것 (thunk / 복사본) 만 지웁니다. 직접 넣은 것은 건드리지 않습니다.
+- `shared` / `server` can be a path string (`"ReplicatedStorage/Packages"`, `"game/ReplicatedStorage/Packages"`) or an Instance (`game.ReplicatedStorage.Packages`).
+- A value can be an Instance instead of a spec (`MyLib = script.MyLib`). It is copied on install, so the original stays under the Config.
+  A ModuleScript is copied to `_Index/custom_Alias` with a thunk; anything else (Folder etc.) is copied straight to the install location.
+- `install` only removes things the plugin made (thunks / copies) that are no longer listed. Things you put there yourself are left alone.
 
-처음 만들 때 맨 아래에 쓸 수 있는 항목 설명이 주석으로 들어갑니다.
-Add / Remove / 경로 설정은 필요한 줄만 고치기 때문에 직접 단 주석과 순서가 그대로 남습니다.
-테이블을 코드로 만드는 등 구조를 알아볼 수 없으면 아무것도 바꾸지 않고 오류를 보여줍니다.
-이름에 `-` 가 있으면 Luau 문법상 `["vide-opinionated"] = "cayasde/vide-opinionated@0.4.3"` 처럼 적힙니다.
+When the Config is first created, a comment listing the available keys is added at the bottom.
+Add / Remove / path changes only edit the lines they need, so your comments and order are kept.
+If the structure cannot be understood (e.g. the table is built with code), nothing is changed and an error is shown.
+Names with `-` are written as `["vide-opinionated"] = "cayasde/vide-opinionated@0.4.3"` (Luau syntax).
 
-## 설치 구조
+## Install layout
 ```
 ReplicatedStorage/Packages/
   Signal                      -- thunk (require + export type re-export)
   _Index/
     sleitnick_signal@2.0.1/
-      signal                  -- 실제 패키지
-      Promise                 -- 의존성 thunk
+      signal                  -- the package
+      Promise                 -- dependency thunk
     evaera_promise@4.0.0/
       promise
 ```
 
-## 설치
-1. [Releases](https://github.com/RO-BURa/WallyPackageLoader/releases) 에서 최신 `WallyPackageLoader.rbxm` 을 받습니다.
-2. Studio 에서 **Plugins → Plugins Folder** 를 눌러 열린 폴더에 넣습니다.
-3. Studio 를 다시 열면 툴바에 버튼이 생깁니다.
+## Installation
+1. Download the latest `WallyPackageLoader.rbxm` from [Releases](https://github.com/RO-BURa/WallyPackageLoader/releases).
+2. In Studio, click **Plugins → Plugins Folder** and put it in the folder that opens.
+3. Reopen Studio and the buttons appear in the toolbar.
 
-업데이트는 새 `.rbxm` 으로 덮어쓰면 됩니다.
+To update, overwrite it with the new `.rbxm`.
 
-## 빌드 (직접)
+## Building
 ```bash
 rokit install
 rojo build --plugin WallyPackageLoader.rbxm
 ```
-`--plugin` 은 Studio 의 로컬 플러그인 폴더에 바로 빌드합니다.
+`--plugin` builds straight into Studio's local plugins folder.
 
-`v0.1.0` 같은 태그를 push 하면 GitHub Actions 가 `.rbxm` 을 빌드해서 Release 에 올립니다 (`.github/workflows/release.yml`).
+Pushing a tag like `v0.1.0` makes GitHub Actions build the `.rbxm` and attach it to a Release (`.github/workflows/release.yml`).
 
-처음 사용할 때 Studio 가 HTTP 요청(api.wally.run, registry.pesde.daimond113.com, api.github.com, codeload.github.com, raw.githubusercontent.com, 로그인 시 github.com)과
-스크립트 삽입 권한을 물어봅니다.
+On first use Studio asks for HTTP access (api.wally.run, registry.pesde.daimond113.com, api.github.com, codeload.github.com, raw.githubusercontent.com, github.com for login) and script injection.
 
-## 구조
-| 파일 | 역할 |
+## Source layout
+| File | Role |
 |---|---|
-| `src/init.server.luau` | 툴바 버튼, DockWidget |
-| `src/Ui.luau` | 메인 창 UI |
-| `src/SearchUi.luau` | 검색 창 UI |
-| `src/Tree.luau` | 의존성 트리 |
-| `src/Installer.luau` | 스펙 해석, 의존성 재귀 설치, Config 저장, 정리 |
-| `src/Linker.luau` | `_Index` 구조, thunk 생성, require 경로 계산 |
-| `src/Builder.luau` | 파일 -> Instance (Rojo 규칙, `default.project.json`) |
-| `src/Config.luau` | `PackageLoaderConfig` ModuleScript 읽기/쓰기 |
-| `src/Http.luau` | HttpService 래퍼 |
-| `src/Auth.luau` | GitHub 로그인 (기기 로그인 / 토큰), 토큰 저장 |
-| `src/Publisher.luau` | Instance -> Wally 패키지 zip, 업로드 |
-| `src/Sources/` | Wally, pesde, GitHub, File, manifest(wally.toml / pesde.toml), Search(검색), Details(검색 상세 화면) |
-| `src/Util/` | Inflate(deflate/gzip), Zip(읽기/쓰기), Tar, Crypto(SHA-256, PBKDF2, 토큰 암호화), Semver, Toml, Lexer, TypeExports, ConfigEditor, RojoValues(Rojo 속성 값), Vfs |
+| `src/init.server.luau` | Toolbar buttons, DockWidgets |
+| `src/Ui.luau` | Main window UI |
+| `src/SearchUi.luau` | Search window UI |
+| `src/Locale.luau` | Korean / English |
+| `src/Tree.luau` | Dependency tree |
+| `src/Installer.luau` | Spec resolving, recursive install, Config updates, prune |
+| `src/Linker.luau` | `_Index` layout, thunks, require paths |
+| `src/Builder.luau` | Files -> Instances (Rojo rules, `default.project.json`) |
+| `src/Config.luau` | Reading / writing the `PackageLoaderConfig` ModuleScript |
+| `src/Http.luau` | HttpService wrapper |
+| `src/Auth.luau` | GitHub login (device login / token), token storage |
+| `src/Publisher.luau` | Instance -> Wally package zip, upload |
+| `src/Sources/` | Wally, pesde, GitHub, File, manifest (wally.toml / pesde.toml), Search, Details (search detail view) |
+| `src/Util/` | Inflate (deflate/gzip), Zip (read/write), Tar, Crypto (SHA-256, PBKDF2, token encryption), Semver, Toml, Lexer, TypeExports, ConfigEditor, RojoValues (Rojo property values), Vfs |
 
-## 아직 안 되는 것
-- pesde 의 다른 index (기본 레지스트리만), GitHub 외 Git 저장소
-- `.rbxmx` (XML 모델) 는 `SerializationService` 가 읽을 수 있을 때만 됨
-- zip64, 암호화된 zip
+## Not supported yet
+- Other pesde indexes (the default registry only), Git hosts other than GitHub
+- `.rbxmx` (XML models) only when `SerializationService` can read them
+- zip64, encrypted zips
 
-## 참고한 레퍼런스
-- [zzlib.luau](https://github.com/xhayper/zzlib.luau) (WTFPL) - Inflate 구조
-- [roblox-package-manager](https://github.com/McThor2/roblox-package-manager) (MIT) - Wally API 사용법, 파일 변환, 설정 저장 방식
-- [pesde](https://github.com/pesde-pkg/pesde) (MIT) - thunk 의 타입 re-export 로직 (`src/linking/generator.rs`)
-- [wally-package-types](https://github.com/JohnnyMorganz/wally-package-types) (MIT) - 타입 re-export 아이디어
+## References
+- [zzlib.luau](https://github.com/xhayper/zzlib.luau) (WTFPL) - Inflate structure
+- [roblox-package-manager](https://github.com/McThor2/roblox-package-manager) (MIT) - Wally API usage, file conversion, settings storage
+- [pesde](https://github.com/pesde-pkg/pesde) (MIT) - type re-export logic for thunks (`src/linking/generator.rs`)
+- [wally-package-types](https://github.com/JohnnyMorganz/wally-package-types) (MIT) - the type re-export idea
 
-## 마켓 배포 시 참고
-- Roblox 커뮤니티 가이드라인은 외부 사이트 URL 을 링크 / 표시하는 것을 막고 있어서, 플러그인 안의 글(`PRIVACY`, `TERMS`, `THIRD_PARTY_NOTICES`, 오류 메시지)에는 외부 링크를 넣지 않습니다.
-  예외는 기기 로그인에 꼭 필요한 GitHub 로그인 주소 하나입니다. 마켓 설명란에도 링크를 넣지 않습니다.
+## Notes for the Creator Store
+- The Roblox Community Standards do not allow linking to or showing external site URLs, so the text inside the plugin (`PRIVACY`, `TERMS`, `THIRD_PARTY_NOTICES`, error messages) has no external links.
+  The one exception is the GitHub login address needed for device login. The store description has no links either.
 
-## 라이선스 / 개인정보 / 약관
-[MIT](LICENSE). 개인정보 처리 안내는 [PRIVACY.md](PRIVACY.md), 이용 약관은 [TERMS.md](TERMS.md). 참고한 프로젝트의 고지는 [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) 에 있습니다.
-네 파일 모두 빌드할 때 플러그인 안에 StringValue 로 들어가고 (`default.project.json` 의 `syncRules`),
-`license` / `privacy` / `terms` 명령으로 볼 수 있습니다. `PackageLoaderConfig` 를 처음 만들 때 그 안에 `LICENSE` 모듈도 같이 만듭니다 (지워도 됨).
+## License / privacy / terms
+[MIT](LICENSE). Privacy notice: [PRIVACY.md](PRIVACY.md), terms of use: [TERMS.md](TERMS.md). Notices for referenced projects are in [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
+All four files are bundled into the plugin as StringValues at build time (`syncRules` in `default.project.json`)
+and can be read with the `license` / `privacy` / `terms` commands. A `LICENSE` module is also created inside `PackageLoaderConfig` the first time (you can delete it).

@@ -123,7 +123,7 @@ function Inflate.raw(data: string, startPos: number?, sizeHint: number?): string
 		fill(nbits)
 		const entry = huff[band(bitBuf, lshift(1, nbits) - 1)]
 		if not entry then
-			error("Inflate: 잘못된 허프만 코드")
+			error("Inflate: invalid Huffman code")
 		end
 		const len = band(entry, 15)
 		bitBuf = rshift(bitBuf, len)
@@ -163,7 +163,7 @@ function Inflate.raw(data: string, startPos: number?, sizeHint: number?): string
 					distance += getBits(distExtra)
 				end
 				if distance > outLen then
-					error("Inflate: 거리 값이 출력 범위를 벗어남")
+					error("Inflate: distance out of range")
 				end
 
 				ensure(size)
@@ -203,7 +203,7 @@ function Inflate.raw(data: string, startPos: number?, sizeHint: number?): string
 				local repeatCount
 				if v == 16 then
 					if i == 1 then
-						error("Inflate: 반복할 이전 길이가 없음")
+						error("Inflate: no previous length to repeat")
 					end
 					repeatValue = depths[i - 1]
 					repeatCount = 3 + getBits(2)
@@ -217,7 +217,7 @@ function Inflate.raw(data: string, startPos: number?, sizeHint: number?): string
 					i += 1
 				end
 			else
-				error(`Inflate: 잘못된 길이 코드 {v}`)
+				error(`Inflate: invalid length code {v}`)
 			end
 		end
 
@@ -237,7 +237,7 @@ function Inflate.raw(data: string, startPos: number?, sizeHint: number?): string
 		const len = getBits(16)
 		const nlen = getBits(16)
 		if bxor(len, nlen) ~= 0xFFFF then
-			error("Inflate: LEN/NLEN 불일치")
+			error("Inflate: LEN/NLEN mismatch")
 		end
 		-- 이 시점에서 bitCount 는 항상 0
 		ensure(len)
@@ -256,7 +256,7 @@ function Inflate.raw(data: string, startPos: number?, sizeHint: number?): string
 		elseif blockType == 2 then
 			blockDynamic()
 		else
-			error("Inflate: 지원하지 않는 블록 타입")
+			error("Inflate: unsupported block type")
 		end
 	until last == 1
 
@@ -267,10 +267,10 @@ end
 function Inflate.gunzip(data: string): string
 	const id1, id2, method, flags = string.byte(data, 1, 4)
 	if id1 ~= 31 or id2 ~= 139 then
-		error("Inflate: gzip 헤더가 아님")
+		error("Inflate: not a gzip header")
 	end
 	if method ~= 8 then
-		error("Inflate: deflate 가 아닌 gzip")
+		error("Inflate: gzip that is not deflate")
 	end
 
 	local pos = 11

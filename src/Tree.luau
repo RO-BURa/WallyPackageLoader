@@ -2,6 +2,7 @@
 --   설치된 것: _Index 의 thunk 를 따라감 (인터넷 필요 없음)
 --   설치 안 된 스펙 / wally.toml: 서버에서 버전을 찾아서 따라감
 
+const L = require(script.Parent.Locale).L
 const Linker = require(script.Parent.Linker)
 
 export type Node = {
@@ -49,7 +50,7 @@ const function entriesByPath(): { [string]: Instance }
 	return result
 end
 
--- "ro-bura_signal@1.0.0" -> "ro-bura/signal@1.0.0", "custom_X" -> "직접 넣은 것"
+-- "ro-bura_signal@1.0.0" -> "ro-bura/signal@1.0.0", "custom_X" -> L("직접 넣은 것", "added by hand")
 const function entryLabel(entry: Instance): string
 	const pesdeScope, pesdeRest = string.match(entry.Name, "^pesde%+([^_]+)_(.+@.+)$")
 	if pesdeScope then
@@ -60,7 +61,7 @@ const function entryLabel(entry: Instance): string
 		return `{scope}/{rest}`
 	end
 	if string.match(entry.Name, "^custom_") then
-		return "직접 넣은 것"
+		return L("직접 넣은 것", "added by hand")
 	end
 	return entry.Name
 end
@@ -75,16 +76,16 @@ function Tree.installed()
 	const function fromEntry(alias: string, entry: Instance, path: { [Instance]: boolean }, depth: number): Node
 		const node: Node = { alias = alias, label = entryLabel(entry), children = {} }
 		if path[entry] then
-			node.note = "(순환)"
+			node.note = L("(순환)", "(cycle)")
 			return node
 		end
 		if seen[entry] then
-			node.note = "(위와 같음)"
+			node.note = L("(위와 같음)", "(see above)")
 			return node
 		end
 		seen[entry] = true
 		if depth >= MAX_DEPTH then
-			node.note = "(너무 깊음)"
+			node.note = L("(너무 깊음)", "(too deep)")
 			return node
 		end
 		path[entry] = true
@@ -108,7 +109,7 @@ function Tree.installed()
 		const link = thunk:GetAttribute(Linker.LINK_ATTRIBUTE)
 		const entry = if type(link) == "string" then entries[link] else nil
 		if not entry then
-			return { alias = thunk.Name, label = "?", note = "(가리키는 패키지가 없음, install 필요)", children = {} }
+			return { alias = thunk.Name, label = "?", note = L("(가리키는 패키지가 없음, install 필요)", "(target package missing, run install)"), children = {} }
 		end
 		return fromEntry(thunk.Name, entry, path, depth)
 	end
@@ -148,12 +149,12 @@ function Tree.remote(resolve: Resolver)
 			package = if ok then result else false
 			cache[spec] = package
 			if not ok then
-				node.note = `(찾을 수 없음: {result})`
+				node.note = L(`(찾을 수 없음: {result})`, `(not found: {result})`)
 				return node
 			end
 		end
 		if not package then
-			node.note = "(찾을 수 없음)"
+			node.note = L("(찾을 수 없음)", "(not found)")
 			return node
 		end
 		const id = (if package.source == "pesde" then "pesde:" else "") .. `{package.scope}/{package.name}@{package.version}`
@@ -162,16 +163,16 @@ function Tree.remote(resolve: Resolver)
 			node.note = "(server)"
 		end
 		if path[id] then
-			node.note = "(순환)"
+			node.note = L("(순환)", "(cycle)")
 			return node
 		end
 		if seen[id] then
-			node.note = (if node.note then node.note .. " " else "") .. "(위와 같음)"
+			node.note = (if node.note then node.note .. " " else "") .. L("(위와 같음)", "(see above)")
 			return node
 		end
 		seen[id] = true
 		if depth >= MAX_DEPTH then
-			node.note = "(너무 깊음)"
+			node.note = L("(너무 깊음)", "(too deep)")
 			return node
 		end
 		path[id] = true

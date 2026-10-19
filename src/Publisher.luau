@@ -5,6 +5,7 @@
 const HttpService = game:GetService("HttpService")
 const SerializationService = game:GetService("SerializationService")
 
+const L = require(script.Parent.Locale).L
 const Auth = require(script.Parent.Auth)
 const Http = require(script.Parent.Http)
 const Linker = require(script.Parent.Linker)
@@ -75,7 +76,7 @@ function Publisher.findSource(selected: Instance): Instance
 				end
 			end
 		end
-		error(`{source.Name} 은 thunk 인데 가리키는 패키지를 찾을 수 없음`, 0)
+		error(L(`{source.Name} 은 thunk 인데 가리키는 패키지를 찾을 수 없음`, `{source.Name} is a thunk but its package could not be found`), 0)
 	end
 	return source
 end
@@ -113,38 +114,38 @@ function Publisher.createManifest(source: Instance, scope: string?): ModuleScrip
 		then "server"
 		else "shared"
 	const lines = {
-		"# # 으로 시작하는 줄은 주석 (설명). 값은 꼭 \"...\" 로 감싸기",
+		L("# # 으로 시작하는 줄은 주석 (설명). 값은 꼭 \"...\" 로 감싸기", "# Lines starting with # are comments. Always wrap values in \"...\""),
 		"",
 		"[package]",
-		"# scope/이름. scope 는 GitHub 아이디(또는 이미 가진 scope), 전부 소문자 / 숫자 / - / _",
+		L("# scope/이름. scope 는 GitHub 아이디(또는 이미 가진 scope), 전부 소문자 / 숫자 / - / _", "# scope/name. scope is your GitHub username (or a scope you own). Lowercase letters / digits / - / _ only"),
 		`name = "{if scope then string.lower(scope) else "scope"}/{name}"`,
-		"# 올릴 때마다 올려야 함. 같은 버전은 다시 못 올리고 올린 건 못 지움 (예: 0.1.0 -> 0.1.1)",
+		L("# 올릴 때마다 올려야 함. 같은 버전은 다시 못 올리고 올린 건 못 지움 (예: 0.1.0 -> 0.1.1)", "# Bump it on every publish. The same version cannot be published twice and published versions cannot be deleted (e.g. 0.1.0 -> 0.1.1)"),
 		`version = "0.1.0"`,
-		"# 공식 Wally 레지스트리. 보통 바꿀 일 없음",
+		L("# 공식 Wally 레지스트리. 보통 바꿀 일 없음", "# The official Wally registry. Usually left as is"),
 		`registry = "{REGISTRY}"`,
-		"# shared: 클라이언트 / 서버 둘 다 (ReplicatedStorage), server: 서버만 (ServerScriptService 등)",
+		L("# shared: 클라이언트 / 서버 둘 다 (ReplicatedStorage), server: 서버만 (ServerScriptService 등)", "# shared: client and server (ReplicatedStorage), server: server only (ServerScriptService etc.)"),
 		`realm = "{realm}"`,
-		"# 패키지 설명 (Wally 사이트와 검색에 나옴)",
+		L("# 패키지 설명 (Wally 사이트와 검색에 나옴)", "# Package description (shown on the Wally site and in search)"),
 		`description = ""`,
-		"# 만든 사람 목록. 예: [\"RO_BURa\"]",
+		L("# 만든 사람 목록. 예: [\"RO_BURa\"]", "# Authors. e.g. [\"RO_BURa\"]"),
 		`authors = []`,
-		"# 라이선스. 예: \"MIT\"",
+		L("# 라이선스. 예: \"MIT\"", "# License. e.g. \"MIT\""),
 		`license = ""`,
 		"",
-		"# 의존성: 별칭 = \"scope/name@버전\"",
-		"# 코드에서는 require(script.Parent.별칭) 으로 불러옴",
-		"# 버전: ^1.2 (1.x 중 최신), 1.2.3 (정확히), >=1, <2 등",
-		"# 예: Promise = \"evaera/promise@^4\"",
+		L("# 의존성: 별칭 = \"scope/name@버전\"", "# Dependencies: Alias = \"scope/name@version\""),
+		L("# 코드에서는 require(script.Parent.별칭) 으로 불러옴", "# Require them in code with require(script.Parent.Alias)"),
+		L("# 버전: ^1.2 (1.x 중 최신), 1.2.3 (정확히), >=1, <2 등", "# Versions: ^1.2 (latest 1.x), 1.2.3 (exact), >=1, <2 etc."),
+		L("# 예: Promise = \"evaera/promise@^4\"", "# e.g. Promise = \"evaera/promise@^4\""),
 	}
 	tomlSection(lines, "dependencies", shared)
 	table.insert(lines, "")
-	table.insert(lines, "# 서버에서만 쓰는 의존성 (realm 이 server 인 패키지만 쓸 수 있음)")
+	table.insert(lines, L("# 서버에서만 쓰는 의존성 (realm 이 server 인 패키지만 쓸 수 있음)", "# Server only dependencies (only for packages whose realm is server)"))
 	tomlSection(lines, "server-dependencies", server)
 
 	const manifest = Instance.new("ModuleScript")
 	manifest.Name = MANIFEST_NAME
-	;(manifest :: any).Source = "-- publish 할 때 이 내용이 wally.toml 이 됨 (이 스크립트는 업로드에서 빠짐)\n"
-		.. "-- 의존성은 코드에서 require(script.Parent.별칭) 으로 불러옴\n"
+	;(manifest :: any).Source = L("-- publish 할 때 이 내용이 wally.toml 이 됨 (이 스크립트는 업로드에서 빠짐)\n", "-- This becomes wally.toml when you publish (this script itself is not uploaded)\n")
+		.. L("-- 의존성은 코드에서 require(script.Parent.별칭) 으로 불러옴\n", "-- Require dependencies in code with require(script.Parent.Alias)\n")
 		.. "return [==[\n"
 		.. table.concat(lines, "\n")
 		.. "\n]==]\n"
@@ -163,7 +164,7 @@ end
 function Publisher.readManifest(manifest: ModuleScript): { [string]: any }
 	const ok, data = pcall(Toml.decode, manifestText(manifest))
 	if not ok then
-		error(`{MANIFEST_NAME} 을 읽을 수 없음: {data}`, 0)
+		error(L(`{MANIFEST_NAME} 을 읽을 수 없음: {data}`, `Could not read {MANIFEST_NAME}: {data}`), 0)
 	end
 	return data
 end
@@ -171,7 +172,7 @@ end
 -- 의존성 하나 검사 (Wally 에는 Wally 패키지만 의존성으로 올릴 수 있음)
 const function checkDependency(alias: string, spec: any)
 	if type(spec) ~= "string" or not string.match(spec, "^[%w_%-]+/[%w_%-]+@.+$") then
-		error(`의존성 {alias} = {tostring(spec)}: Wally 패키지 (scope/name@버전) 만 됨`, 0)
+		error(L(`의존성 {alias} = {tostring(spec)}: Wally 패키지 (scope/name@버전) 만 됨`, `Dependency {alias} = {tostring(spec)}: only Wally packages (scope/name@version) are allowed`), 0)
 	end
 end
 
@@ -179,7 +180,7 @@ end
 const function addInstance(files: { [string]: string }, dir: string, instance: Instance, log: (string) -> ())
 	const name = instance.Name
 	if string.find(name, "[/\\]") then
-		error(`이름에 / 나 \\ 가 있어서 파일로 만들 수 없음: {instance:GetFullName()}`, 0)
+		error(L(`이름에 / 나 \\ 가 있어서 파일로 만들 수 없음: {instance:GetFullName()}`, `Name contains / or \\ and cannot be a file: {instance:GetFullName()}`), 0)
 	end
 	const path = `{dir}/{name}`
 	const children = instance:GetChildren()
@@ -212,7 +213,7 @@ const function addInstance(files: { [string]: string }, dir: string, instance: I
 		if ok then
 			files[`{path}.rbxm`] = result
 		else
-			log(`경고: {instance:GetFullName()} 을 .rbxm 으로 저장할 수 없어서 뺌 ({result})`)
+			log(L(`경고: {instance:GetFullName()} 을 .rbxm 으로 저장할 수 없어서 뺌 ({result})`, `Warning: left out {instance:GetFullName()}, could not save it as .rbxm ({result})`))
 		end
 	end
 end
@@ -221,33 +222,33 @@ end
 function Publisher.prepare(source: Instance, log: (string) -> ()): Prepared
 	const manifestScript = Publisher.getManifest(source)
 	if not manifestScript then
-		error(`{source.Name} 안에 {MANIFEST_NAME} 이 없음 (publish 로 만들 수 있음)`, 0)
+		error(L(`{source.Name} 안에 {MANIFEST_NAME} 이 없음 (publish 로 만들 수 있음)`, `{source.Name} has no {MANIFEST_NAME} (publish creates one)`), 0)
 	end
 	const manifest = manifestText(manifestScript)
 	const ok, data = pcall(Toml.decode, manifest)
 	if not ok then
-		error(`{MANIFEST_NAME} 을 읽을 수 없음: {data}`, 0)
+		error(L(`{MANIFEST_NAME} 을 읽을 수 없음: {data}`, `Could not read {MANIFEST_NAME}: {data}`), 0)
 	end
 
 	const package = data.package
 	if type(package) ~= "table" then
-		error(`{MANIFEST_NAME} 에 [package] 가 없음`, 0)
+		error(L(`{MANIFEST_NAME} 에 [package] 가 없음`, `{MANIFEST_NAME} has no [package]`), 0)
 	end
 	const name, version = package.name, package.version
 	if type(name) ~= "string" or not string.match(name, "^[a-z0-9_%-]+/[a-z0-9_%-]+$") then
-		error(`name 은 "scope/name" (소문자/숫자/-/_ 만): {tostring(name)}`, 0)
+		error(L(`name 은 "scope/name" (소문자/숫자/-/_ 만): {tostring(name)}`, `name must be "scope/name" (lowercase letters / digits / - / _ only): {tostring(name)}`), 0)
 	end
 	if string.match(name, "^scope/") then
-		error(`{MANIFEST_NAME} 의 name 에 scope (GitHub 아이디) 를 적어주세요: {name}`, 0)
+		error(L(`{MANIFEST_NAME} 의 name 에 scope (GitHub 아이디) 를 적어주세요: {name}`, `Put your scope (GitHub username) in the name in {MANIFEST_NAME}: {name}`), 0)
 	end
 	if type(version) ~= "string" or not Semver.parse(version) then
-		error(`version 형식이 아님: {tostring(version)} (예: 1.0.0)`, 0)
+		error(L(`version 형식이 아님: {tostring(version)} (예: 1.0.0)`, `Invalid version: {tostring(version)} (e.g. 1.0.0)`), 0)
 	end
 	if type(package.registry) ~= "string" then
-		error(`registry 가 없음 (registry = "{REGISTRY}")`, 0)
+		error(L(`registry 가 없음 (registry = "{REGISTRY}")`, `registry is missing (registry = "{REGISTRY}")`), 0)
 	end
 	if package.realm ~= "shared" and package.realm ~= "server" then
-		error(`realm 은 "shared" 또는 "server": {tostring(package.realm)}`, 0)
+		error(L(`realm 은 "shared" 또는 "server": {tostring(package.realm)}`, `realm must be "shared" or "server": {tostring(package.realm)}`), 0)
 	end
 	for _, section in { "dependencies", "server-dependencies", "dev-dependencies" } do
 		for alias, spec in data[section] or {} do
@@ -255,7 +256,7 @@ function Publisher.prepare(source: Instance, log: (string) -> ()): Prepared
 		end
 	end
 	if not source:IsA("ModuleScript") then
-		log(`경고: {source.Name} 은 ModuleScript 가 아니라서 require 할 수 없는 패키지가 됨`)
+		log(L(`경고: {source.Name} 은 ModuleScript 가 아니라서 require 할 수 없는 패키지가 됨`, `Warning: {source.Name} is not a ModuleScript, so the package cannot be required`))
 	end
 
 	const packageName = string.match(name, "/(.+)$") :: string
@@ -285,7 +286,7 @@ function Publisher.prepare(source: Instance, log: (string) -> ()): Prepared
 
 	const zip = Zip.create(files, paths)
 	if #zip > MAX_SIZE then
-		error(`패키지가 2MB 를 넘음 ({math.ceil(#zip / 1024)}KB)`, 0)
+		error(L(`패키지가 2MB 를 넘음 ({math.ceil(#zip / 1024)}KB)`, `The package is over 2MB ({math.ceil(#zip / 1024)}KB)`), 0)
 	end
 
 	return {
@@ -303,10 +304,10 @@ end
 function Publisher.upload(prepared: Prepared)
 	const token = Auth.getToken()
 	if not token then
-		error("로그인이 필요함 (login)", 0)
+		error(L("로그인이 필요함 (login)", "Login required (login)"), 0)
 	end
 	if Auth.kind() ~= "device" then
-		error("Wally 업로드는 login (기기 로그인) 으로 받은 토큰만 됨. 직접 넣은 토큰은 Wally 서버가 받지 않음", 0)
+		error(L("Wally 업로드는 login (기기 로그인) 으로 받은 토큰만 됨. 직접 넣은 토큰은 Wally 서버가 받지 않음", "Publishing to Wally needs a token from login (device login). The Wally server does not accept tokens you paste in"), 0)
 	end
 
 	Http.post(`{API}/v1/publish`, prepared.zip, {
