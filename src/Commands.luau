@@ -36,6 +36,8 @@ export type Flags = {
 	keep: boolean?,
 	-- import 용 (파일 대신 Explorer 에서 선택한 것을 가져옴)
 	select: boolean?,
+	-- path 용 (기본 경로로 되돌림)
+	reset: boolean?,
 	-- 저장할 / 풀 비밀번호와 확인용 (--password <비밀번호> --r <비밀번호>)
 	password: string?,
 	confirm: string?,
@@ -126,8 +128,22 @@ const HELP: { [string]: HelpEntry } = {
 	},
 	path = {
 		summary = "shared / server 경로 설정",
-		usage = { "path shared <경로 | --selected>", "path server <경로 | --selected>" },
-		examples = { "path shared ReplicatedStorage/Packages", "path server --selected" },
+		usage = {
+			"path shared <경로 | --selected>",
+			"path server <경로 | --selected>",
+			"path reset [shared | server]",
+		},
+		options = {
+			{ "reset", "기본 경로로 되돌림 (shared: ReplicatedStorage/Packages, server: ServerScriptService/ServerPackages). 뒤에 아무것도 없으면 둘 다" },
+		},
+		examples = {
+			"path shared ReplicatedStorage/Packages",
+			"path server --selected",
+			"path reset",
+			"path reset server",
+			"path shared --reset",
+		},
+		notes = { "경로만 바꿈. 이미 설치한 건 옮기지 않으니 install 로 다시 설치" },
 	},
 	list = {
 		summary = "설치한 패키지 목록 (ls)",
@@ -327,6 +343,8 @@ const function takeFlags(words: { string }): ({ string }, Flags)
 			flags.keep = true
 		elseif word == "--select" then
 			flags.select = true
+		elseif word == "--reset" then
+			flags.reset = true
 		elseif word == "--to" then
 			flags.to = words[i + 1]
 			if not flags.to then
@@ -442,6 +460,22 @@ function Commands.import(flags: Flags, context: Context, selectedFallback: boole
 		return
 	end
 	Installer.importFiles({ location = targetFor(flags, selectedFallback), log = context.log })
+end
+
+-- 기본 경로로 되돌림 (which: "shared" / "server" / nil 이면 둘 다)
+function Commands.resetPath(which: string?, context: Context)
+	if which and which ~= "shared" and which ~= "server" then
+		error("path reset [shared | server]", 0)
+	end
+	if not which or which == "shared" then
+		Config.setSharedPath(Config.DEFAULT_SHARED)
+		context.log(`shared 경로: {Config.DEFAULT_SHARED} (기본값)`)
+	end
+	if not which or which == "server" then
+		Config.setServerPath(Config.DEFAULT_SERVER)
+		context.log(`server 경로: {Config.DEFAULT_SERVER} (기본값)`)
+	end
+	context.log("경로만 바꿈. 이미 설치한 건 install 로 다시 설치해주세요")
 end
 
 function Commands.setPath(kind: string, value: string?, context: Context)
@@ -658,7 +692,7 @@ function Commands.help(context: Context, topic: string?)
 	end
 	nameRows(context, rows, 10)
 	context.rich("")
-	context.rich(Fmt.color("dim", Fmt.escape("help <명령어> 로 자세히, ↑ / ↓ 로 이전 명령")))
+	context.rich(Fmt.color("dim", Fmt.escape("help <명령어> 로 자세히, 로그의 ● 명령 줄을 누르면 입력창에 다시 들어감")))
 end
 
 function Commands.openConfig(context: Context)
@@ -874,7 +908,14 @@ function Commands.run(line: string, context: Context)
 	elseif command == "import" then
 		Commands.import(flags, context)
 	elseif command == "path" then
-		Commands.setPath(string.lower(args[1] or ""), if flags.selected then "--selected" else args[2], context)
+		const first = string.lower(args[1] or "")
+		if first == "reset" then
+			Commands.resetPath(if args[2] then string.lower(args[2]) else nil, context)
+		elseif flags.reset then
+			Commands.resetPath(if first ~= "" then first else nil, context)
+		else
+			Commands.setPath(first, if flags.selected then "--selected" else args[2], context)
+		end
 	elseif command == "tree" then
 		Commands.tree(flags, context)
 	elseif command == "list" or command == "ls" then

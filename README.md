@@ -36,6 +36,7 @@ import [--server | --selected | --to <경로>]   파일에서 가져오기
 import --select [--server | --to <경로>]      Explorer 에서 선택한 것을 복제해서 가져오기 (원본은 그대로)
 path shared <경로 | --selected>       shared 경로 설정
 path server <경로 | --selected>       server 경로 설정
+path reset [shared | server]          기본 경로로 되돌리기 (뒤에 없으면 둘 다, path shared --reset 도 됨)
 list                                  설치한 패키지 목록
 tree [--selected]                     의존성 트리 (Config 기준 / 선택한 wally.toml, thunk, 패키지 폴더 기준)
 prune                                 안 쓰는 _Index 폴더 정리
@@ -89,11 +90,12 @@ help [명령어]                         도움말 (help add 처럼 자세히)
 ### 검색 창
 툴바의 **Search** 버튼으로 엽니다. 검색어를 치고 Enter (또는 돋보기 버튼), 결과의 **Add** 로 Config 에 추가합니다 (설치는 Install All).
 - 검색할 곳: Wally, pesde (Roblox 용만), GitHub (여러 개 선택 가능)
+- Config 에 이미 있는 패키지는 Add 대신 Added 로 보입니다
 - ⚙: 작성자 (Wally scope / GitHub 사용자) 로 좁히기, GitHub 은 Luau 저장소만
 - GitHub 검색은 저장소 이름 / 설명으로 찾습니다 (wally.toml 이 있는지는 안 봄). 로그인 안 하면 요청 한도가 낮습니다 (분당 10번)
 - 결과를 누르면 상세 화면: 버전 고르기, 버전별 설명 / realm / license / authors / 의존성, `Add <버전>` / `Add ^<버전>`, **Files** (내부 파일 구조)
   - GitHub: 별 개수 (로그인했으면 내가 눌렀는지), license, 마지막 push, wally.toml / pesde.toml 의존성, README 앞부분
-  - Files: 파일 목록, 파일을 누르면 내용. Wally / pesde 는 패키지를 받아서, GitHub 은 누른 파일만 받아서 보여줍니다
+  - Files: 파일 목록, 파일을 누르면 내용 (Back to Info / Back to Files 로 돌아감). Wally / pesde 는 패키지를 받아서, GitHub 은 누른 파일만 받아서 보여줍니다
   - 본문과 Config 줄 칸은 선택해서 복사할 수 있습니다
 - 아이콘은 Studio 에 들어 있는 Roblox Builder Icons 폰트를 씁니다
 

@@ -2,6 +2,7 @@
 
 const Auth = require(script.Parent.Auth)
 const Commands = require(script.Parent.Commands)
+const Config = require(script.Parent.Config)
 const Fmt = require(script.Parent.Fmt)
 const Icons = require(script.Parent.Icons)
 const Log = require(script.Parent.Log)
@@ -31,6 +32,34 @@ end
 const function isDarkTheme(): boolean
 	const background = themeColor(Enum.StudioStyleGuideColor.MainBackground)
 	return (background.R + background.G + background.B) / 3 < 0.5
+end
+
+-- 스펙 -> 패키지 구분용 키 (버전 무시): "wally:scope/name", "pesde:scope/name", "github:owner/repo"
+const function packageKey(spec: string): string
+	const trimmed = string.lower((string.gsub(spec, "^%s*(.-)%s*$", "%1")))
+	const pesde = string.match(trimmed, "^pesde:([^@]+)")
+	if pesde then
+		return "pesde:" .. pesde
+	end
+	const github = string.match(trimmed, "^gh:([^@#]+)") or string.match(trimmed, "^github:([^@#]+)")
+	if github then
+		return "github:" .. github
+	end
+	return "wally:" .. (string.match(trimmed, "^wally:([^@]+)") or string.match(trimmed, "^([^@]+)") or trimmed)
+end
+
+-- Config 에 이미 있는 패키지 (키 -> 적힌 스펙들)
+const function configuredPackages(): { [string]: { [string]: boolean } }
+	const result = {}
+	const ok, entries = pcall(Config.entries)
+	for _, entry in if ok then entries else {} do
+		if entry.spec then
+			const key = packageKey(entry.spec)
+			result[key] = result[key] or {}
+			result[key][string.lower(entry.spec)] = true
+		end
+	end
+	return result
 end
 
 -- 별 아이콘 + 개수 (1개 이상이면 굵은 노란 별, 내가 눌렀으면 표시)
@@ -338,17 +367,27 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		end,
 	}
 	const NO_FLAGS: Commands.Flags = { server = false, selected = false, to = nil }
+	-- Config 에 이미 있는 것 (검색 / 상세 화면을 열 때 다시 읽음)
+	local configured = configuredPackages()
 	const function addSpec(spec: string, button: TextLabel?)
+		const before = if button then button.Text else ""
+		if button then
+			button.Text = "..."
+		end
 		task.spawn(function()
 			const ok, err = pcall(Commands.add, spec, NO_FLAGS, addContext)
 			if ok then
 				status.Text = `Config 에 추가함: {spec} (설치는 Install All)`
+				configured = configuredPackages()
 				if button then
 					button.Text = "Added"
 				end
 			else
 				status.Text = `오류: {err}`
 				Log.write(`오류: {err}`)
+				if button then
+					button.Text = before
+				end
 			end
 		end)
 	end
@@ -583,11 +622,14 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		filesList.Visible = false
 		body.Visible = true
 		versionText.Text = version.label
-		addExactText.Text = "Add " .. version.label
+		const versions = configured[packageKey(version.spec)]
+		addExactText.Text = if versions and versions[string.lower(version.spec)] then "Added" else "Add " .. version.label
 		setSpec(configLine(viewId, version.spec))
 		addExact.Visible = true
 		addRange.Visible = version.rangeSpec ~= nil
-		addRangeText.Text = "Add ^"
+		addRangeText.Text = if versions and version.rangeSpec and versions[string.lower(version.rangeSpec)]
+			then "Added ^"
+			else "Add ^"
 		Icons.set(filesIcon, "folder", false)
 		filesText.Text = "Files"
 		setBody(Fmt.color("dim", "불러오는 중..."))
@@ -657,8 +699,8 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		current.mode = "file"
 		filesList.Visible = false
 		body.Visible = true
-		Icons.set(filesIcon, "folder", false)
-		filesText.Text = "Files"
+		Icons.set(filesIcon, "chevron-large-left", false)
+		filesText.Text = "Back to Files"
 		setBody(Fmt.color("dim", `{Fmt.escape(path)} 받는 중...`))
 		loadGeneration += 1
 		const mine = loadGeneration
@@ -687,8 +729,8 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		current.mode = "files"
 		body.Visible = false
 		filesList.Visible = true
-		Icons.set(filesIcon, "file-box", false)
-		filesText.Text = "Info"
+		Icons.set(filesIcon, "chevron-large-left", false)
+		filesText.Text = "Back to Info"
 		for _, child in filesList:GetChildren() do
 			if child:IsA("GuiObject") then
 				child:Destroy()
@@ -759,8 +801,8 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			showFiles(current, version, loaded.files)
 			return
 		end
-		Icons.set(filesIcon, "file-box", false)
-		filesText.Text = "Info"
+		Icons.set(filesIcon, "chevron-large-left", false)
+		filesText.Text = "Back to Info"
 		current.mode = "files"
 		setBody(Fmt.color("dim", "파일 목록을 받는 중..."))
 		loadGeneration += 1
@@ -798,6 +840,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		addExact.Visible = false
 		addRange.Visible = false
 		versionText.Text = "버전"
+		configured = configuredPackages()
 		viewId = result.id
 		setSpec(configLine(result.id, result.spec))
 		title.Text = Fmt.resolve(Fmt.bold(Fmt.escape(result.id)), isDarkTheme())
@@ -925,14 +968,12 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			TextColor3 = themeColor(Enum.StudioStyleGuideColor.DimmedText),
 			Parent = item,
 		})
-		const add, _, addText = iconButton("plus-small", "Add", {
-			ZIndex = 2,
-			Size = UDim2.fromOffset(64, 24),
+		const add, _, addText = iconButton("plus-small", if configured[packageKey(result.spec)] then "Added" else "Add", {
+			Size = UDim2.fromOffset(70, 24),
 			Position = UDim2.new(1, -66, 0, 4),
 			Parent = item,
 		})
 		add.Activated:Connect(function()
-			addText.Text = "..."
 			addSpec(result.spec, addText)
 		end)
 		make("Frame", {
@@ -967,6 +1008,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 		end
 		generation += 1
 		const mine = generation
+		configured = configuredPackages()
 		closeDetail()
 		clearResults()
 		status.Text = "검색 중..."
