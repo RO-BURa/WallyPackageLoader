@@ -2,6 +2,7 @@
 
 const HttpService = game:GetService("HttpService")
 
+const L = require(script.Parent.Locale).L
 const Builder = require(script.Parent.Builder)
 const Config = require(script.Parent.Config)
 const Linker = require(script.Parent.Linker)
@@ -41,7 +42,7 @@ function Installer.resolve(spec: string): Package
 		const path, range = string.match(target, "^([^@]+)@(.+)$")
 		const owner, repo = string.match(path or target, "^([%w_%-%.]+)/([%w_%-%.]+)$")
 		if not owner then
-			error(`잘못된 GitHub 스펙: {spec} (예: gh:owner/repo@^1.0)`, 0)
+			error(L(`잘못된 GitHub 스펙: {spec} (예: gh:owner/repo@^1.0)`, `Invalid GitHub spec: {spec} (e.g. gh:owner/repo@^1.0)`), 0)
 		end
 		return GitHub.resolve(owner, repo, range, ref)
 	end
@@ -51,7 +52,7 @@ function Installer.resolve(spec: string): Package
 		const path, range = string.match(pesde, "^([^@]+)@(.+)$")
 		const scope, name = string.match(path or pesde, "^([%w_%-]+)/([%w_%-]+)$")
 		if not scope then
-			error(`잘못된 pesde 패키지: '{spec}' (예: pesde:scope/name@^1.0)`, 0)
+			error(L(`잘못된 pesde 패키지: '{spec}' (예: pesde:scope/name@^1.0)`, `Invalid pesde package: '{spec}' (e.g. pesde:scope/name@^1.0)`), 0)
 		end
 		return Pesde.resolve(scope, name, range)
 	end
@@ -61,7 +62,7 @@ function Installer.resolve(spec: string): Package
 	-- Wally 이름은 영문/숫자/-/_ 만 (공백 등이 있으면 요청 전에 막음)
 	const scope, name = string.match(path or body, "^([%w_%-]+)/([%w_%-]+)$")
 	if not scope then
-		error(`잘못된 패키지: '{spec}' (예: sleitnick/signal@^2)`, 0)
+		error(L(`잘못된 패키지: '{spec}' (예: sleitnick/signal@^2)`, `Invalid package: '{spec}' (e.g. sleitnick/signal@^2)`), 0)
 	end
 	return Wally.resolve(scope, name, range)
 end
@@ -113,11 +114,11 @@ placePackage = function(context: Context, package: Package, root: Instance): (In
 		existing:Destroy()
 	end
 
-	context.log(`받는 중: {if package.source == "pesde" then "pesde:" else ""}{package.scope}/{package.name}@{package.version}`)
+	context.log(L(`받는 중: {if package.source == "pesde" then "pesde:" else ""}{package.scope}/{package.name}@{package.version}`, `Fetching: {if package.source == "pesde" then "pesde:" else ""}{package.scope}/{package.name}@{package.version}`))
 	const vfs = package.fetch()
 	const packageInstance = Builder.buildPackage(vfs, package.name, package.entryPath)
 	if not packageInstance then
-		error(`{entryName}: 패키지 내용을 찾을 수 없음`, 0)
+		error(L(`{entryName}: 패키지 내용을 찾을 수 없음`, `{entryName}: package contents not found`), 0)
 	end
 
 	const entry = Instance.new("Folder")
@@ -130,7 +131,7 @@ placePackage = function(context: Context, package: Package, root: Instance): (In
 	linkDependencies(context, entry, root, package.dependencies, false)
 	linkDependencies(context, entry, root, package.serverDependencies, true)
 
-	context.log(`설치됨: {entryName}`)
+	context.log(L(`설치됨: {entryName}`, `Installed: {entryName}`))
 	return entry, packageInstance
 end
 
@@ -178,7 +179,7 @@ function Installer.installPackage(package: Package, options: InstallOptions): st
 		error(err, 0)
 	end
 
-	context.log(`완료: {alias} -> {package.scope}/{package.name}@{package.version} ({Config.pathOf(base)})`)
+	context.log(L(`완료: {alias} -> {package.scope}/{package.name}@{package.version} ({Config.pathOf(base)})`, `Done: {alias} -> {package.scope}/{package.name}@{package.version} ({Config.pathOf(base)})`))
 	return alias
 end
 
@@ -246,7 +247,7 @@ function Installer.installSource(alias: string, source: Instance, options: Insta
 		rollback(context)
 		error(err, 0)
 	end
-	context.log(`완료: {alias} -> {source.Name} ({Config.pathOf(base)})`)
+	context.log(L(`완료: {alias} -> {source.Name} ({Config.pathOf(base)})`, `Done: {alias} -> {source.Name} ({Config.pathOf(base)})`))
 end
 
 -- 버전을 안 적었으면 찾은 버전으로 고정 (wally add 처럼)
@@ -266,18 +267,18 @@ end
 -- 반환: 별칭, Config 에 적은 스펙
 function Installer.add(spec: string, alias: string?, path: string, log: ((string) -> ())?): (string, string)
 	const logger = log or Log.write
-	logger(`확인 중: {spec}`)
+	logger(L(`확인 중: {spec}`, `Checking: {spec}`))
 	const package = Installer.resolve(spec)
 	const finalAlias = alias or Installer.defaultAlias(package)
 	const pinned = pinVersion(spec, package)
 
 	const previous = Config.addDependency(finalAlias, pinned, path)
 	if previous and previous ~= pinned then
-		logger(`추가됨: {finalAlias} = {pinned} (이전: {previous}) ({path})`)
+		logger(L(`추가됨: {finalAlias} = {pinned} (이전: {previous}) ({path})`, `Added: {finalAlias} = {pinned} (was: {previous}) ({path})`))
 	else
-		logger(`추가됨: {finalAlias} = {pinned} ({path})`)
+		logger(L(`추가됨: {finalAlias} = {pinned} ({path})`, `Added: {finalAlias} = {pinned} ({path})`))
 	end
-	logger("install 로 설치")
+	logger(L("install 로 설치", "Run install to install it"))
 	return finalAlias, pinned
 end
 
@@ -305,14 +306,14 @@ function Installer.installAll(log: ((string) -> ())?)
 				const name = child.Name
 				if Linker.isManaged(child) and not aliases[name] then
 					child:Destroy()
-					logger(`삭제됨: {name} ({location})`)
+					logger(L(`삭제됨: {name} ({location})`, `Removed: {name} ({location})`))
 				end
 			end
 		end
 	end
 
 	if #entries == 0 then
-		logger("Config 에 적힌 패키지가 없음")
+		logger(L("Config 에 적힌 패키지가 없음", "No packages in the Config"))
 	end
 	for _, entry in entries do
 		const ok, err = pcall(function()
@@ -328,7 +329,7 @@ function Installer.installAll(log: ((string) -> ())?)
 			end
 		end)
 		if not ok then
-			logger(`실패: {entry.alias} - {err}`)
+			logger(L(`실패: {entry.alias} - {err}`, `Failed: {entry.alias} - {err}`))
 		end
 	end
 
@@ -347,7 +348,7 @@ storeAndInstall = function(stored: Instance, alias: string, base: Instance, log:
 	stored.Parent = storage
 
 	Config.addDependency(alias, stored, path)
-	log(`가져옴: {alias} = {Config.childExpression(stored)} ({path})`)
+	log(L(`가져옴: {alias} = {Config.childExpression(stored)} ({path})`, `Imported: {alias} = {Config.childExpression(stored)} ({path})`))
 	Installer.installSource(alias, stored, { location = base, log = log })
 end
 
@@ -355,17 +356,17 @@ end
 function Installer.importInstance(source: Instance, options: InstallOptions)
 	const context = newContext(options.log)
 	if Linker.isManaged(source) then
-		error(`{source.Name} 은 플러그인이 만든 thunk / 복사본이라 가져올 수 없음 (원본을 선택해주세요)`, 0)
+		error(L(`{source.Name} 은 플러그인이 만든 thunk / 복사본이라 가져올 수 없음 (원본을 선택해주세요)`, `{source.Name} is a thunk / copy made by the plugin and cannot be imported (select the original)`), 0)
 	end
 	if source:IsDescendantOf(Config.storage()) then
-		error(`{source.Name} 은 이미 가져온 것`, 0)
+		error(L(`{source.Name} 은 이미 가져온 것`, `{source.Name} is already imported`), 0)
 	end
 	if source:IsDescendantOf(Config.getModule()) then
-		error("PackageLoaderConfig 안의 것은 가져올 수 없음", 0)
+		error(L("PackageLoaderConfig 안의 것은 가져올 수 없음", "Things inside PackageLoaderConfig cannot be imported"), 0)
 	end
 	const ok, copy = pcall(source.Clone, source)
 	if not ok or not copy then
-		error(`{source.Name} 을 복제할 수 없음 (Archivable 이 꺼져 있는지 확인)`, 0)
+		error(L(`{source.Name} 을 복제할 수 없음 (Archivable 이 꺼져 있는지 확인)`, `Could not clone {source.Name} (check that Archivable is on)`), 0)
 	end
 	const base = options.location or context.sharedRoot()
 	storeAndInstall(copy, options.alias or source.Name, base, context.log)
@@ -379,7 +380,7 @@ function Installer.importFiles(options: InstallOptions)
 	const path = Config.pathOf(base)
 	const files = File.prompt()
 	if #files == 0 then
-		context.log("선택한 파일이 없음")
+		context.log(L("선택한 파일이 없음", "No file selected"))
 		return
 	end
 	for _, file in files do
@@ -397,7 +398,7 @@ function Installer.importFiles(options: InstallOptions)
 				const package = imported.package
 				const built = Builder.buildPackage(package.fetch(), package.name, package.entryPath)
 				if not built then
-					error("가져올 내용이 없음", 0)
+					error(L("가져올 내용이 없음", "Nothing to import"), 0)
 				end
 				built:SetAttribute(DEPENDENCIES_ATTRIBUTE, HttpService:JSONEncode({
 					dependencies = package.dependencies,
@@ -408,7 +409,7 @@ function Installer.importFiles(options: InstallOptions)
 			else
 				const built = Builder.buildPackage(imported.vfs, imported.name)
 				if not built then
-					error("가져올 내용이 없음", 0)
+					error(L("가져올 내용이 없음", "Nothing to import"), 0)
 				end
 				stored = built
 				defaultAlias = imported.name
@@ -417,7 +418,7 @@ function Installer.importFiles(options: InstallOptions)
 			storeAndInstall(stored, options.alias or defaultAlias, base, context.log)
 		end)
 		if not ok then
-			context.log(`실패: {file.Name} - {err}`)
+			context.log(L(`실패: {file.Name} - {err}`, `Failed: {file.Name} - {err}`))
 		end
 	end
 end
@@ -435,9 +436,9 @@ function Installer.remove(alias: string, location: string?, log: ((string) -> ()
 			end
 		end
 		if #matches == 0 then
-			error(`Config 에 '{alias}' 가 없음`, 0)
+			error(L(`Config 에 '{alias}' 가 없음`, `'{alias}' is not in the Config`), 0)
 		elseif #matches > 1 then
-			error(`'{alias}' 가 여러 곳에 있음 ({table.concat(matches, ", ")}). Explorer 에서 지울 것을 선택하고 Remove 를 눌러주세요`, 0)
+			error(L(`'{alias}' 가 여러 곳에 있음 ({table.concat(matches, ", ")}). Explorer 에서 지울 것을 선택하고 Remove 를 눌러주세요`, `'{alias}' is in more than one place ({table.concat(matches, ", ")}). Select the one to remove in the Explorer and press Remove`), 0)
 		end
 		resolved = matches[1]
 	end
@@ -462,14 +463,14 @@ function Installer.remove(alias: string, location: string?, log: ((string) -> ()
 		stored:Destroy()
 	end
 	Installer.prune(logger)
-	logger(`삭제됨: {alias} ({path})`)
+	logger(L(`삭제됨: {alias} ({path})`, `Removed: {alias} ({path})`))
 end
 
 -- 어디서도 쓰이지 않는 _Index 엔트리 삭제
 function Installer.prune(log: ((string) -> ())?)
 	const logger = log or Log.write
 	for _, name in Linker.prune() do
-		logger(`정리됨: {name}`)
+		logger(L(`정리됨: {name}`, `Pruned: {name}`))
 	end
 end
 

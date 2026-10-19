@@ -71,6 +71,20 @@ const LABEL_COLORS = {
 	["server"] = "cyan",
 	["shared 경로"] = "cyan",
 	["server 경로"] = "cyan",
+	-- 영어
+	["Error"] = "red",
+	["Failed"] = "red",
+	["Warning"] = "yellow",
+	["Done"] = "green",
+	["Added"] = "green",
+	["Installed"] = "green",
+	["Removed"] = "green",
+	["Imported"] = "green",
+	["Pruned"] = "green",
+	["Fetching"] = "dim",
+	["Checking"] = "dim",
+	["shared path"] = "cyan",
+	["server path"] = "cyan",
 }
 
 function Fmt.line(text: string): string

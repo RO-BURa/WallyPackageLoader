@@ -1,17 +1,21 @@
 -- Wally, GitHub(pesde 방식), 파일에서 패키지를 바로 불러오는 플러그인
 
 const Auth = require(script.Auth)
+const Locale = require(script.Locale)
 const SearchUi = require(script.SearchUi)
 const Ui = require(script.Ui)
+
+const L = Locale.L
 
 -- 툴바 아이콘 (업로드한 Decal 86460136593495 / 132302594577680 의 이미지 ID)
 const PACKAGES_ICON = "rbxassetid://94108074565091"
 const SEARCH_ICON = "rbxassetid://118685771787843"
 
+Locale.init(plugin)
 Auth.init(plugin)
 
 const toolbar = plugin:CreateToolbar("Package Loader")
-const toggleButton = toolbar:CreateButton("Packages", "패키지 불러오기 창 열기", PACKAGES_ICON)
+const toggleButton = toolbar:CreateButton("Packages", L("패키지 불러오기 창 열기", "Open the package loader"), PACKAGES_ICON)
 toggleButton.ClickableWhenViewportHidden = true
 
 const widget = plugin:CreateDockWidgetPluginGui(
@@ -33,7 +37,7 @@ end)
 Ui.mount(widget, plugin)
 
 -- 검색 창
-const searchButton = toolbar:CreateButton("Search", "Wally / pesde / GitHub 패키지 검색", SEARCH_ICON)
+const searchButton = toolbar:CreateButton("Search", L("Wally / pesde / GitHub 패키지 검색", "Search Wally / pesde / GitHub packages"), SEARCH_ICON)
 searchButton.ClickableWhenViewportHidden = true
 
 const searchWidget = plugin:CreateDockWidgetPluginGui(

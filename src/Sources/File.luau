@@ -2,6 +2,7 @@
 
 const StudioService = game:GetService("StudioService")
 
+const L = require(script.Parent.Parent.Locale).L
 const Vfs = require(script.Parent.Parent.Util.Vfs)
 const Zip = require(script.Parent.Parent.Util.Zip)
 const Manifest = require(script.Parent.Manifest)
@@ -28,7 +29,7 @@ const File = {}
 function File.prompt(): { File }
 	const ok, files = pcall(StudioService.PromptImportFilesAsync, StudioService, { "lua", "luau", "zip" })
 	if not ok then
-		error(`파일 선택 실패: {files}`, 0)
+		error(L(`파일 선택 실패: {files}`, `Could not open the file picker: {files}`), 0)
 	end
 	return files or {}
 end
@@ -47,7 +48,7 @@ function File.read(file: File): Imported
 	end
 
 	if string.sub(lower, -4) ~= ".zip" then
-		error(`지원하지 않는 파일: {fileName}`, 0)
+		error(L(`지원하지 않는 파일: {fileName}`, `Unsupported file: {fileName}`), 0)
 	end
 
 	const vfs = Vfs.new(Zip.extract(contents)):stripSingleRoot()

@@ -5,6 +5,7 @@
 
 const HttpService = game:GetService("HttpService")
 
+const L = require(script.Parent.Parent.Locale).L
 const Http = require(script.Parent.Parent.Http)
 const Inflate = require(script.Parent.Parent.Util.Inflate)
 const Log = require(script.Parent.Parent.Log)
@@ -60,7 +61,7 @@ function Pesde.dependencySpecs(dependencies: any): { [string]: string }
 				const wallyName = string.gsub(info.wally, "^.-#", "")
 				result[alias] = wallyName .. (if version then `@{version}` else "")
 			else
-				Log.warn(`pesde 의존성 '{alias}' 는 지원하지 않는 형식이라 건너뜀`)
+				Log.warn(L(`pesde 의존성 '{alias}' 는 지원하지 않는 형식이라 건너뜀`, `Skipped pesde dependency '{alias}': unsupported kind`))
 			end
 		end
 	end
@@ -100,7 +101,7 @@ function Pesde.download(url: string): { [string]: string }
 		data = Inflate.gunzip(data)
 	end
 	if not isTar(data) then
-		error(`pesde: 받은 파일이 tar.gz 가 아님 ({#data} bytes, 앞부분: {preview(data)})`, 0)
+		error(L(`pesde: 받은 파일이 tar.gz 가 아님 ({#data} bytes, 앞부분: {preview(data)})`, `pesde: the download is not a tar.gz ({#data} bytes, starts with: {preview(data)})`), 0)
 	end
 	return Tar.extract(data)
 end
@@ -109,7 +110,7 @@ function Pesde.resolve(scope: string, name: string, rangeText: string?): Package
 	const lowerScope, lowerName = string.lower(scope), string.lower(name)
 	const metadata = Pesde.metadata(lowerScope, lowerName)
 	if type(metadata) ~= "table" or type(metadata.versions) ~= "table" then
-		error(`pesde: {lowerScope}/{lowerName} 정보를 읽을 수 없음`, 0)
+		error(L(`pesde: {lowerScope}/{lowerName} 정보를 읽을 수 없음`, `pesde: could not read {lowerScope}/{lowerName}`), 0)
 	end
 
 	const range = Semver.parseRange(rangeText)
@@ -123,7 +124,7 @@ function Pesde.resolve(scope: string, name: string, rangeText: string?): Package
 	end
 	const index = Semver.pickHighest(range, candidates)
 	if not index then
-		error(`pesde: {lowerScope}/{lowerName}@{rangeText or "*"} 를 만족하는 Roblox 버전이 없음`, 0)
+		error(L(`pesde: {lowerScope}/{lowerName}@{rangeText or "*"} 를 만족하는 Roblox 버전이 없음`, `pesde: no Roblox version matches {lowerScope}/{lowerName}@{rangeText or "*"}`), 0)
 	end
 
 	const label = labels[index]

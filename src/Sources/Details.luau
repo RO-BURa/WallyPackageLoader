@@ -1,5 +1,6 @@
 -- 검색 창의 상세 화면에 쓸 정보 (버전 목록, 버전별 정보, 내부 구조)
 
+const L = require(script.Parent.Parent.Locale).L
 const Auth = require(script.Parent.Parent.Auth)
 const Http = require(script.Parent.Parent.Http)
 const Semver = require(script.Parent.Parent.Util.Semver)
@@ -122,7 +123,7 @@ function Details.wally(scope: string, name: string): { versions: { Version }, in
 					table.insert(fields, { title, value })
 				end
 			end
-			field("설명", list(package.description))
+			field(L("설명", "description"), list(package.description))
 			field("realm", list(package.realm) or "shared")
 			field("license", list(package.license))
 			field("authors", list(package.authors))
@@ -199,12 +200,12 @@ function Details.pesde(scope: string, name: string): { versions: { Version }, in
 					table.insert(fields, { title, value })
 				end
 			end
-			field("설명", list(versionInfo.description))
+			field(L("설명", "description"), list(versionInfo.description))
 			field("target", kind)
 			field("license", list(inner.license))
 			field("authors", list(inner.authors))
 			field("repository", list(inner.repository))
-			field("올린 날", if type(inner.published_at) == "string" then string.sub(inner.published_at, 1, 10) else nil)
+			field(L("올린 날", "published"), if type(inner.published_at) == "string" then string.sub(inner.published_at, 1, 10) else nil)
 			if type(metadata) == "table" and type(metadata.deprecated) == "string" and metadata.deprecated ~= "" then
 				field("deprecated", metadata.deprecated)
 			end
@@ -223,7 +224,7 @@ function Details.pesdeFiles(scope: string, name: string, version: string): Files
 	const versionInfo = if type(metadata) == "table" and type(metadata.versions) == "table" then metadata.versions[version] else nil
 	const kind = Pesde.robloxTarget(versionInfo)
 	if not kind then
-		error("Roblox 용 target 이 없음", 0)
+		error(L("Roblox 용 target 이 없음", "No Roblox target"), 0)
 	end
 	return filesFromMap(Pesde.download(Pesde.archiveUrl(scope, name, version, kind :: string)))
 end
@@ -247,12 +248,12 @@ function Details.githubRepo(owner: string, repo: string): Repo
 			table.insert(fields, { title, value })
 		end
 	end
-	field("설명", list(info.description))
+	field(L("설명", "description"), list(info.description))
 	field("license", if type(info.license) == "table" then list(info.license.spdx_id) else nil)
-	field("주 언어", list(info.language))
+	field(L("주 언어", "language"), list(info.language))
 	field("topics", list(info.topics))
-	field("마지막 push", if type(info.pushed_at) == "string" then string.sub(info.pushed_at, 1, 10) else nil)
-	field("기본 브랜치", list(info.default_branch))
+	field(L("마지막 push", "last push"), if type(info.pushed_at) == "string" then string.sub(info.pushed_at, 1, 10) else nil)
+	field(L("기본 브랜치", "default branch"), list(info.default_branch))
 
 	-- 내가 별을 눌렀는지 (204 = 누름, 404 = 안 누름). 로그인 안 했거나 실패하면 모름
 	local starred: boolean? = nil
@@ -293,7 +294,7 @@ function Details.githubVersions(owner: string, repo: string, defaultBranch: stri
 		})
 	end
 	table.insert(versions, {
-		label = `{defaultBranch} (브랜치)`,
+		label = L(`{defaultBranch} (브랜치)`, `{defaultBranch} (branch)`),
 		spec = `gh:{owner}/{repo}#{defaultBranch}`,
 	})
 	return versions
@@ -325,25 +326,25 @@ function Details.githubInfo(owner: string, repo: string, version: Version): Info
 		const ok, data = pcall(Toml.decode, wally)
 		if ok then
 			const package = data.package or {}
-			table.insert(fields, { "매니페스트", `wally.toml ({tostring(package.name or "?")}@{tostring(package.version or "?")})` })
+			table.insert(fields, { L("매니페스트", "manifest"), `wally.toml ({tostring(package.name or "?")}@{tostring(package.version or "?")})` })
 			if package.realm then
 				table.insert(fields, { "realm", tostring(package.realm) })
 			end
 			dependencies = data.dependencies or {}
 			serverDependencies = data["server-dependencies"] or {}
 		else
-			warning = "wally.toml 을 읽을 수 없음"
+			warning = L("wally.toml 을 읽을 수 없음", "Could not read wally.toml")
 		end
 	elseif pesde then
 		const ok, data = pcall(Toml.decode, pesde)
-		table.insert(fields, { "매니페스트", `pesde.toml ({tostring(ok and data.name or "?")})` })
+		table.insert(fields, { L("매니페스트", "manifest"), `pesde.toml ({tostring(ok and data.name or "?")})` })
 		if ok and type(data.dependencies) == "table" then
 			for alias, dep in data.dependencies do
 				dependencies[alias] = if type(dep) == "table" then (dep.wally or dep.repo or dep.name or "?") .. "@" .. tostring(dep.version or "*") else tostring(dep)
 			end
 		end
 	else
-		warning = "wally.toml / pesde.toml 이 없음. 저장소 구조 그대로 가져옴 (default.project.json 이 있으면 그걸 따름)"
+		warning = L("wally.toml / pesde.toml 이 없음. 저장소 구조 그대로 가져옴 (default.project.json 이 있으면 그걸 따름)", "No wally.toml / pesde.toml. The repository is used as is (default.project.json is followed if present)")
 	end
 
 	-- README 앞부분 (글자만)
@@ -401,7 +402,7 @@ function Details.pathTree(paths: { string }, limit: number?): { TreeLine }
 	const max = limit or 500
 	for _, path in paths do
 		if #lines >= max then
-			table.insert(lines, { text = `... ({#paths} 개 중 일부)` })
+			table.insert(lines, { text = L(`... ({#paths} 개 중 일부)`, `... (part of {#paths})`) })
 			break
 		end
 		const parts = string.split(path, "/")

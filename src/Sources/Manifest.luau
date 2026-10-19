@@ -1,5 +1,6 @@
 -- 패키지 안의 wally.toml / pesde.toml 읽기
 
+const L = require(script.Parent.Parent.Locale).L
 const Log = require(script.Parent.Parent.Log)
 const Toml = require(script.Parent.Parent.Util.Toml)
 const Vfs = require(script.Parent.Parent.Util.Vfs)
@@ -55,7 +56,7 @@ const function pesdeDependencyToSpec(alias: string, dep: any): string?
 		end
 	end
 
-	Log.warn(`pesde 의존성 '{alias}' 는 지원하지 않는 형식이라 건너뜀 (GitHub 외 Git 등)`)
+	Log.warn(L(`pesde 의존성 '{alias}' 는 지원하지 않는 형식이라 건너뜀 (GitHub 외 Git 등)`, `Skipped pesde dependency '{alias}': unsupported kind (e.g. Git outside GitHub)`))
 	return nil
 end
 

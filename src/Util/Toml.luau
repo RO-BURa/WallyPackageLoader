@@ -23,7 +23,7 @@ const function parseString(text: string, pos: number): (string, number)
 	if quote == "'" then
 		const close = string.find(text, "'", pos + 1, true)
 		if not close then
-			error("Toml: 닫히지 않은 문자열")
+			error("Toml: unclosed string")
 		end
 		return string.sub(text, pos + 1, close - 1), close + 1
 	end
@@ -44,7 +44,7 @@ const function parseString(text: string, pos: number): (string, number)
 			i += 1
 		end
 	end
-	error("Toml: 닫히지 않은 문자열")
+	error("Toml: unclosed string")
 end
 
 const function parseKey(text: string, pos: number): ({ string }, number)
@@ -59,7 +59,7 @@ const function parseKey(text: string, pos: number): ({ string }, number)
 		else
 			const key = string.match(text, "^[%w_%-]+", pos)
 			if not key then
-				error(`Toml: 키를 읽을 수 없음 (위치 {pos})`)
+				error(`Toml: could not read key (position {pos})`)
 			end
 			table.insert(keys, key)
 			pos += #key
@@ -112,7 +112,7 @@ parseValue = function(text: string, pos: number): (any, number)
 			const keys, afterKey = parseKey(text, pos)
 			pos = skipSpace(text, afterKey)
 			if string.sub(text, pos, pos) ~= "=" then
-				error("Toml: '=' 가 필요함")
+				error("Toml: '=' expected")
 			end
 			const value, nextPos = parseValue(text, pos + 1)
 			setPath(tbl, keys, value)
@@ -130,7 +130,7 @@ parseValue = function(text: string, pos: number): (any, number)
 		if num then
 			return tonumber((string.gsub(num, "_", ""))), pos + #num
 		end
-		error(`Toml: 값을 읽을 수 없음 (위치 {pos})`)
+		error(`Toml: could not read value (position {pos})`)
 	end
 end
 
@@ -170,7 +170,7 @@ function Toml.decode(text: string): { [string]: any }
 			const keys, afterKey = parseKey(text, pos)
 			pos = skipSpace(text, afterKey)
 			if string.sub(text, pos, pos) ~= "=" then
-				error(`Toml: '=' 가 필요함 (위치 {pos})`)
+				error(`Toml: '=' expected (position {pos})`)
 			end
 			const value, nextPos = parseValue(text, pos + 1)
 			setPath(current, keys, value)

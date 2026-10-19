@@ -1,6 +1,7 @@
 -- Wally 레지스트리 (https://api.wally.run)
 -- 참고: roblox-package-manager 의 WallyApi (MIT)
 
+const L = require(script.Parent.Parent.Locale).L
 const Http = require(script.Parent.Parent.Http)
 const Semver = require(script.Parent.Parent.Util.Semver)
 const Vfs = require(script.Parent.Parent.Util.Vfs)
@@ -18,7 +19,7 @@ function Wally.resolve(scope: string, name: string, rangeText: string?): Package
 	const lowerScope, lowerName = string.lower(scope), string.lower(name)
 	const metadata = Http.getJson(`{API}/v1/package-metadata/{lowerScope}/{lowerName}`, HEADERS)
 	if type(metadata) ~= "table" or type(metadata.versions) ~= "table" then
-		error(`Wally: {lowerScope}/{lowerName} 메타데이터를 읽을 수 없음`, 0)
+		error(L(`Wally: {lowerScope}/{lowerName} 메타데이터를 읽을 수 없음`, `Wally: could not read metadata for {lowerScope}/{lowerName}`), 0)
 	end
 
 	const range = Semver.parseRange(rangeText)
@@ -34,7 +35,7 @@ function Wally.resolve(scope: string, name: string, rangeText: string?): Package
 
 	const index = Semver.pickHighest(range, candidates)
 	if not index then
-		error(`Wally: {lowerScope}/{lowerName}@{rangeText or "*"} 를 만족하는 버전이 없음`, 0)
+		error(L(`Wally: {lowerScope}/{lowerName}@{rangeText or "*"} 를 만족하는 버전이 없음`, `Wally: no version matches {lowerScope}/{lowerName}@{rangeText or "*"}`), 0)
 	end
 
 	const entry = entries[index]

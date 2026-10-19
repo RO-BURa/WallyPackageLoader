@@ -4,6 +4,7 @@
 const HttpService = game:GetService("HttpService")
 const SerializationService = game:GetService("SerializationService")
 
+const L = require(script.Parent.Locale).L
 const Log = require(script.Parent.Log)
 const RojoValues = require(script.Parent.Util.RojoValues)
 const Vfs = require(script.Parent.Util.Vfs)
@@ -87,7 +88,7 @@ end
 const function decodeJson(content: string, path: string): any?
 	const ok, decoded = pcall(HttpService.JSONDecode, HttpService, content)
 	if not ok or type(decoded) ~= "table" then
-		Log.warn(`JSON 을 읽을 수 없어 건너뜀: {path}`)
+		Log.warn(L(`JSON 을 읽을 수 없어 건너뜀: {path}`, `Skipped, could not read JSON: {path}`))
 		return nil
 	end
 	return decoded
@@ -97,7 +98,7 @@ end
 const function applyValues(instance: Instance, properties: any, attributes: any, path: string)
 	const failed = RojoValues.apply(instance, properties, attributes)
 	for _, item in failed do
-		Log.warn(`{path}: 속성을 적용할 수 없음 {item}`)
+		Log.warn(L(`{path}: 속성을 적용할 수 없음 {item}`, `{path}: could not apply property {item}`))
 	end
 end
 
@@ -118,7 +119,7 @@ const function buildModel(node: any, name: string, path: string): Instance?
 	const className = node.ClassName or node.className or "Folder"
 	const ok, instance = pcall(Instance.new, className)
 	if not ok then
-		Log.warn(`{path}: 만들 수 없는 클래스 {className}`)
+		Log.warn(L(`{path}: 만들 수 없는 클래스 {className}`, `{path}: cannot create class {className}`))
 		return nil
 	end
 	instance.Name = name
@@ -139,7 +140,7 @@ const function buildBinaryModel(content: string, name: string, path: string): In
 		return SerializationService:DeserializeInstancesAsync(buffer.fromstring(content))
 	end)
 	if not ok then
-		Log.warn(`모델 파일을 읽을 수 없어 건너뜀: {path} ({string.match(tostring(result), "^[^\n]*")})`)
+		Log.warn(L(`모델 파일을 읽을 수 없어 건너뜀: {path} ({string.match(tostring(result), "^[^\n]*")})`, `Skipped, could not read model file: {path} ({string.match(tostring(result), "^[^\n]*")})`))
 		return nil
 	end
 	if #result == 1 then
@@ -176,14 +177,14 @@ const function buildFile(vfs: Vfs, path: string, fileName: string): Instance?
 	elseif string.sub(fileName, -5) == ".json" then
 		const ok, decoded = pcall(HttpService.JSONDecode, HttpService, content)
 		if not ok then
-			Log.warn(`JSON 을 읽을 수 없어 건너뜀: {path}`)
+			Log.warn(L(`JSON 을 읽을 수 없어 건너뜀: {path}`, `Skipped, could not read JSON: {path}`))
 			return nil
 		end
 		return newScript("ModuleScript", string.sub(fileName, 1, -6), "return " .. toLuau(decoded, "") .. "\n")
 	elseif string.sub(fileName, -5) == ".toml" then
 		const ok, decoded = pcall(Toml.decode, content)
 		if not ok then
-			Log.warn(`TOML 을 읽을 수 없어 건너뜀: {path}`)
+			Log.warn(L(`TOML 을 읽을 수 없어 건너뜀: {path}`, `Skipped, could not read TOML: {path}`))
 			return nil
 		end
 		return newScript("ModuleScript", string.sub(fileName, 1, -6), "return " .. toLuau(decoded, "") .. "\n")
@@ -234,7 +235,7 @@ buildDir = function(vfs: Vfs, dir: string, name: string, ignoreProject: boolean?
 		end
 		local ok, created = pcall(Instance.new, className)
 		if not ok then
-			Log.warn(`{initMetaPath}: 만들 수 없는 클래스 {className}`)
+			Log.warn(L(`{initMetaPath}: 만들 수 없는 클래스 {className}`, `{initMetaPath}: cannot create class {className}`))
 			created = Instance.new("Folder")
 		end
 		created.Name = name
@@ -308,7 +309,7 @@ const function buildProjectNode(vfs: Vfs, baseDir: string, node: { [string]: any
 	if type(node["$path"]) == "string" then
 		instance = Builder.buildPath(vfs, resolveRelative(baseDir, node["$path"]), name, true)
 		if not instance then
-			Log.warn(`프로젝트 경로를 찾을 수 없음: {node["$path"]}`)
+			Log.warn(L(`프로젝트 경로를 찾을 수 없음: {node["$path"]}`, `Project path not found: {node["$path"]}`))
 		end
 	end
 
@@ -316,7 +317,7 @@ const function buildProjectNode(vfs: Vfs, baseDir: string, node: { [string]: any
 		const className = if type(node["$className"]) == "string" then node["$className"] else "Folder"
 		const ok, created = pcall(Instance.new, className)
 		if not ok then
-			Log.warn(`만들 수 없는 클래스: {className}`)
+			Log.warn(L(`만들 수 없는 클래스: {className}`, `Cannot create class: {className}`))
 			return nil
 		end
 		instance = created
@@ -341,7 +342,7 @@ end
 buildProjectFile = function(vfs: Vfs, path: string): Instance?
 	const ok, project = pcall(HttpService.JSONDecode, HttpService, vfs:read(path) :: string)
 	if not ok or type(project) ~= "table" or type(project.tree) ~= "table" then
-		Log.warn(`잘못된 프로젝트 파일: {path}`)
+		Log.warn(L(`잘못된 프로젝트 파일: {path}`, `Invalid project file: {path}`))
 		return nil
 	end
 	const baseDir = string.match(path, "^(.*)/[^/]+$") or ""

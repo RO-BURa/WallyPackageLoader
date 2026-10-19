@@ -16,7 +16,7 @@ const function findEndOfCentralDirectory(data: string): number
 			return pos
 		end
 	end
-	error("Zip: zip 파일이 아님 (End of Central Directory 없음)")
+	error("Zip: not a zip file (no End of Central Directory)")
 end
 
 -- 반환: { [경로] = 내용 } (디렉터리 엔트리는 제외)
@@ -30,7 +30,7 @@ function Zip.extract(data: string): { [string]: string }
 		const signature, _, _, _, method, _, _, _, compressedSize, size, nameLen, extraLen, commentLen =
 			string.unpack("<I4 I2 I2 I2 I2 I2 I2 I4 I4 I4 I2 I2 I2", data, cursor)
 		if signature ~= CENTRAL_SIGNATURE then
-			error("Zip: 잘못된 central directory 엔트리")
+			error("Zip: invalid central directory entry")
 		end
 		const localOffset = string.unpack("<I4", data, cursor + 42)
 		const name = string.sub(data, cursor + 46, cursor + 45 + nameLen)
@@ -39,7 +39,7 @@ function Zip.extract(data: string): { [string]: string }
 		if string.sub(name, -1) ~= "/" then
 			const localPos = localOffset + 1
 			if string.unpack("<I4", data, localPos) ~= LOCAL_SIGNATURE then
-				error(`Zip: 잘못된 local header ({name})`)
+				error(`Zip: invalid local header ({name})`)
 			end
 			const localNameLen, localExtraLen = string.unpack("<I2 I2", data, localPos + 26)
 			const dataPos = localPos + 30 + localNameLen + localExtraLen
@@ -49,7 +49,7 @@ function Zip.extract(data: string): { [string]: string }
 			elseif method == 8 then
 				files[name] = Inflate.raw(data, dataPos, size)
 			else
-				error(`Zip: 지원하지 않는 압축 방식 {method} ({name})`)
+				error(`Zip: unsupported compression method {method} ({name})`)
 			end
 		end
 	end

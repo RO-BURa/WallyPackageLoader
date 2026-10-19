@@ -2,6 +2,7 @@
 
 const Selection = game:GetService("Selection")
 
+const L = require(script.Parent.Locale).L
 const Config = require(script.Parent.Config)
 const Fmt = require(script.Parent.Fmt)
 const Auth = require(script.Parent.Auth)
@@ -9,6 +10,7 @@ const Installer = require(script.Parent.Installer)
 const Publisher = require(script.Parent.Publisher)
 const LicenseText = require(script.Parent.LicenseText)
 const Linker = require(script.Parent.Linker)
+const Locale = require(script.Parent.Locale)
 const Tree = require(script.Parent.Tree)
 
 export type Context = {
@@ -70,31 +72,36 @@ const COMMAND_ORDER = {
 	"cancel",
 	"publish",
 	"clear",
+	"lang",
 	"license",
 	"privacy",
 	"terms",
 	"help",
 }
 
-const LOCATION_OPTIONS = {
-	{ "--server", "server 경로에" },
-	{ "--selected", "Explorer 에서 선택한 폴더에" },
-	{ "--to <경로>", "지정한 경로에 (예: ServerStorage/Libs)" },
-}
+const function locationOptions(): { { string } }
+	return {
+	{ "--server", L("server 경로에", "into the server path") },
+	{ "--selected", L("Explorer 에서 선택한 폴더에", "into the folder selected in the Explorer") },
+	{ L("--to <경로>", "--to <path>"), L("지정한 경로에 (예: ServerStorage/Libs)", "into the given path (e.g. ServerStorage/Libs)") },
+	}
+end
 
-const HELP: { [string]: HelpEntry } = {
+-- 언어를 바꿀 수 있어서 볼 때마다 만듦
+const function helpEntries(): { [string]: HelpEntry }
+	return {
 	add = {
-		summary = "Config 에 패키지 추가 (설치는 install)",
-		usage = { "add [<별칭> =] <패키지> [옵션]", "<별칭> = <패키지>" },
+		summary = L("Config 에 패키지 추가 (설치는 install)", "Add a package to the Config (install with install)"),
+		usage = { L("add [<별칭> =] <패키지> [옵션]", "add [<alias> =] <package> [options]"), L("<별칭> = <패키지>", "<alias> = <package>") },
 		args = {
-			{ "<별칭>", "thunk 이름. 없으면 원래 패키지 이름 (vide-opinionated)" },
-			{ "<패키지>", "버전을 안 적으면 찾은 버전으로 고정 (@0.4.3)" },
+			{ L("<별칭>", "<alias>"), L("thunk 이름. 없으면 원래 패키지 이름 (vide-opinionated)", "Thunk name. Defaults to the package name (vide-opinionated)") },
+			{ L("<패키지>", "<package>"), L("버전을 안 적으면 찾은 버전으로 고정 (@0.4.3)", "Without a version, the found version is pinned (@0.4.3)") },
 			{ "", "sleitnick/signal@^2      Wally" },
-			{ "", "gh:owner/repo@^1         GitHub 태그" },
-			{ "", "gh:owner/repo#main       GitHub 브랜치 / 태그 / 커밋" },
-			{ "", "pesde:scope/name@^1      pesde 레지스트리" },
+			{ "", L("gh:owner/repo@^1         GitHub 태그", "gh:owner/repo@^1         GitHub tag") },
+			{ "", L("gh:owner/repo#main       GitHub 브랜치 / 태그 / 커밋", "gh:owner/repo#main       GitHub branch / tag / commit") },
+			{ "", L("pesde:scope/name@^1      pesde 레지스트리", "pesde:scope/name@^1      pesde registry") },
 		},
-		options = LOCATION_OPTIONS,
+		options = locationOptions(),
 		examples = {
 			"add cayasde/vide-opinionated",
 			"vide = cayasde/vide-opinionated@^0.4",
@@ -103,38 +110,38 @@ const HELP: { [string]: HelpEntry } = {
 		},
 	},
 	remove = {
-		summary = "패키지 삭제 (rm)",
-		usage = { "remove <별칭 | 패키지>", "remove" },
+		summary = L("패키지 삭제 (rm)", "Remove a package (rm)"),
+		usage = { L("remove <별칭 | 패키지>", "remove <alias | package>"), "remove" },
 		args = {
-			{ "<별칭>", "Config 에 적힌 이름 (asdf)" },
-			{ "<패키지>", "패키지 이름, 버전 무시 (ro-bura/signal)" },
-			{ "(없음)", "Explorer 에서 선택한 패키지" },
+			{ L("<별칭>", "<alias>"), L("Config 에 적힌 이름 (asdf)", "Name in the Config (asdf)") },
+			{ L("<패키지>", "<package>"), L("패키지 이름, 버전 무시 (ro-bura/signal)", "Package name, version ignored (ro-bura/signal)") },
+			{ L("(없음)", "(none)"), L("Explorer 에서 선택한 패키지", "The package selected in the Explorer") },
 		},
 		examples = { "remove asdf", "rm ro-bura/signal" },
 	},
 	install = {
-		summary = "Config 대로 설치 (없는 건 지우고 적힌 건 설치, wally install)",
+		summary = L("Config 대로 설치 (없는 건 지우고 적힌 건 설치, wally install)", "Install from the Config (removes what is not listed, installs what is, like wally install)"),
 		usage = { "install" },
 	},
 	import = {
-		summary = "파일에서 가져오기 (.lua / .luau 여러 개, .zip). Config 아래에 보관하고 이름 = script.이름 으로 추가",
-		usage = { "import [옵션]", "import --select [--server | --to <경로>]" },
+		summary = L("파일에서 가져오기 (.lua / .luau 여러 개, .zip). Config 아래에 보관하고 이름 = script.이름 으로 추가", "Import from files (.lua / .luau, several at once, .zip). Kept under the Config and added as Name = script.Name"),
+		usage = { L("import [옵션]", "import [options]"), L("import --select [--server | --to <경로>]", "import --select [--server | --to <path>]") },
 		options = {
-			LOCATION_OPTIONS[1],
-			LOCATION_OPTIONS[2],
-			LOCATION_OPTIONS[3],
-			{ "--select", "파일 대신 Explorer 에서 선택한 것을 복제해서 가져옴 (원본은 그대로)" },
+			locationOptions()[1],
+			locationOptions()[2],
+			locationOptions()[3],
+			{ "--select", L("파일 대신 Explorer 에서 선택한 것을 복제해서 가져옴 (원본은 그대로)", "Copy what is selected in the Explorer instead of a file (the original stays)") },
 		},
 	},
 	path = {
-		summary = "shared / server 경로 설정",
+		summary = L("shared / server 경로 설정", "Set the shared / server path"),
 		usage = {
-			"path shared <경로 | --selected>",
-			"path server <경로 | --selected>",
+			L("path shared <경로 | --selected>", "path shared <path | --selected>"),
+			L("path server <경로 | --selected>", "path server <path | --selected>"),
 			"path reset [shared | server]",
 		},
 		options = {
-			{ "reset", "기본 경로로 되돌림 (shared: ReplicatedStorage/Packages, server: ServerScriptService/ServerPackages). 뒤에 아무것도 없으면 둘 다" },
+			{ "reset", L("기본 경로로 되돌림 (shared: ReplicatedStorage/Packages, server: ServerScriptService/ServerPackages). 뒤에 아무것도 없으면 둘 다", "Back to the default path (shared: ReplicatedStorage/Packages, server: ServerScriptService/ServerPackages). Both when nothing follows") },
 		},
 		examples = {
 			"path shared ReplicatedStorage/Packages",
@@ -143,105 +150,114 @@ const HELP: { [string]: HelpEntry } = {
 			"path reset server",
 			"path shared --reset",
 		},
-		notes = { "경로만 바꿈. 이미 설치한 건 옮기지 않으니 install 로 다시 설치" },
+		notes = { L("경로만 바꿈. 이미 설치한 건 옮기지 않으니 install 로 다시 설치", "Only the path changes. Installed packages are not moved, so run install again") },
 	},
 	list = {
-		summary = "설치한 패키지 목록 (ls)",
+		summary = L("설치한 패키지 목록 (ls)", "List installed packages (ls)"),
 		usage = { "list" },
 	},
 	tree = {
-		summary = "의존성 트리",
+		summary = L("의존성 트리", "Dependency tree"),
 		usage = { "tree", "tree --selected" },
 		options = {
-			{ "(없음)", "Config 에 적힌 패키지 기준. 설치된 건 _Index 를 보고, 안 된 건 서버에서 찾아서 그림" },
-			{ "--selected", "Explorer 에서 선택한 것 기준: wally.toml (또는 그게 든 패키지), thunk, _Index 패키지, 패키지 폴더" },
+			{ L("(없음)", "(none)"), L("Config 에 적힌 패키지 기준. 설치된 건 _Index 를 보고, 안 된 건 서버에서 찾아서 그림", "From the Config. Installed packages are read from _Index, others are looked up on the server") },
+			{ "--selected", L("Explorer 에서 선택한 것 기준: wally.toml (또는 그게 든 패키지), thunk, _Index 패키지, 패키지 폴더", "From the Explorer selection: wally.toml (or the package holding it), a thunk, an _Index package or a package folder") },
 		},
 		notes = {
-			"(위와 같음): 위에서 이미 펼친 패키지, (순환): 서로를 의존, (server): 서버 전용",
+			L("(위와 같음): 위에서 이미 펼친 패키지, (순환): 서로를 의존, (server): 서버 전용", "(see above): already expanded above, (cycle): they depend on each other, (server): server only"),
 		},
 	},
 	prune = {
-		summary = "안 쓰는 _Index 폴더 정리",
+		summary = L("안 쓰는 _Index 폴더 정리", "Remove unused _Index folders"),
 		usage = { "prune" },
 	},
 	config = {
-		summary = "Config 스크립트 열기",
+		summary = L("Config 스크립트 열기", "Open the Config script"),
 		usage = { "config" },
 	},
 	clear = {
-		summary = "로그 지우기",
+		summary = L("로그 지우기", "Clear the log"),
 		usage = { "clear" },
 	},
+	lang = {
+		summary = L("언어 (한국어 / 영어)", "Language (Korean / English)"),
+		usage = { "lang", "lang ko", "lang en", "lang auto" },
+		options = {
+			{ "ko / en", L("한국어 / 영어로 고정 (이 컴퓨터에 저장)", "Use Korean / English (saved on this computer)") },
+			{ "auto", L("Studio 언어를 따라감 (기본)", "Follow the Studio language (default)") },
+		},
+	},
 	login = {
-		summary = "GitHub 로그인 (토큰은 플레이스에 절대 안 들어감)",
+		summary = L("GitHub 로그인 (토큰은 플레이스에 절대 안 들어감)", "GitHub login (the token never goes into the place)"),
 		usage = {
 			"login --agree [--remember]",
-			"login --agree --password <비밀번호> --r <비밀번호>",
-			"login <토큰> --agree [--remember]",
-			"login [--password <비밀번호>]",
+			L("login --agree --password <비밀번호> --r <비밀번호>", "login --agree --password <password> --r <password>"),
+			L("login <토큰> --agree [--remember]", "login <token> --agree [--remember]"),
+			L("login [--password <비밀번호>]", "login [--password <password>]"),
 		},
 		args = {
-			{ "(없음)", "기기 로그인: 나오는 주소에서 코드를 입력하고 승인. Wally 업로드 + GitHub 요청 한도 증가" },
-			{ "<토큰>", "직접 만든 GitHub 토큰 (권한 없이 만들어도 됨). GitHub 요청 한도만 늘어나고 Wally 업로드는 안 됨" },
+			{ L("(없음)", "(none)"), L("기기 로그인: 나오는 주소에서 코드를 입력하고 승인. Wally 업로드 + GitHub 요청 한도 증가", "Device login: enter the code at the shown address and approve. Wally publishing + higher GitHub request limit") },
+			{ L("<토큰>", "<token>"), L("직접 만든 GitHub 토큰 (권한 없이 만들어도 됨). GitHub 요청 한도만 늘어나고 Wally 업로드는 안 됨", "A GitHub token you made (no scopes needed). Only raises the GitHub request limit, cannot publish to Wally") },
 		},
 		options = {
-			{ "--agree", "주의 사항과 privacy / terms 를 읽고 동의함. 없으면 주의 사항만 보여주고 로그인 안 함" },
-			{ "--remember", "로그인 후 비밀번호(10자 이상)를 두 번 입력받아 토큰을 암호화해 이 컴퓨터에 저장. 없으면 Studio 를 끄면 로그아웃" },
-			{ "--password <비밀번호> --r <비밀번호>", "비밀번호를 바로 적음 (--r 은 확인용). 저장할 때는 --remember 없이도 됨. 로그에는 **** 로" },
+			{ "--agree", L("주의 사항과 privacy / terms 를 읽고 동의함. 없으면 주의 사항만 보여주고 로그인 안 함", "You read and agree to the warnings and privacy / terms. Without it, only the warnings are shown") },
+			{ "--remember", L("로그인 후 비밀번호(10자 이상)를 두 번 입력받아 토큰을 암호화해 이 컴퓨터에 저장. 없으면 Studio 를 끄면 로그아웃", "After login, asks for a password (10+ characters) twice and saves the token encrypted on this computer. Without it, you are logged out when Studio closes") },
+			{ L("--password <비밀번호> --r <비밀번호>", "--password <password> --r <password>"), L("비밀번호를 바로 적음 (--r 은 확인용). 저장할 때는 --remember 없이도 됨. 로그에는 **** 로", "Type the password inline (--r repeats it). Saves without --remember. Shown as **** in the log") },
 		},
 		notes = {
-			"저장된 로그인이 있으면 login 은 새로 로그인하지 않고 저장된 것을 풂 (login --password <비밀번호>, 없으면 입력창에 * 로 가려서 받음)",
-			"새로 로그인하려면 logout 후 login --agree",
-			"비밀번호를 잊었으면 logout 후 다시 로그인",
+			L("저장된 로그인이 있으면 login 은 새로 로그인하지 않고 저장된 것을 풂 (login --password <비밀번호>, 없으면 입력창에 * 로 가려서 받음)", "With a saved login, login unlocks it instead of logging in again (login --password <password>, or a hidden input box)"),
+			L("새로 로그인하려면 logout 후 login --agree", "To log in again from scratch: logout, then login --agree"),
+			L("비밀번호를 잊었으면 logout 후 다시 로그인", "Forgot the password? logout, then log in again"),
 		},
 	},
 	logout = {
-		summary = "GitHub 로그아웃 (저장된 토큰도 삭제)",
+		summary = L("GitHub 로그아웃 (저장된 토큰도 삭제)", "GitHub logout (also deletes the saved token)"),
 		usage = { "logout [--keep]" },
 		options = {
-			{ "--keep", "이번 세션만 로그아웃하고 저장된 토큰은 남김 (다음에 login --password 로 다시 풂)" },
+			{ "--keep", L("이번 세션만 로그아웃하고 저장된 토큰은 남김 (다음에 login --password 로 다시 풂)", "Log out of this session only and keep the saved token (unlock again with login --password)") },
 		},
 	},
 	cancel = {
-		summary = "기다리는 중인 GitHub 로그인 취소",
+		summary = L("기다리는 중인 GitHub 로그인 취소", "Cancel a GitHub login that is waiting"),
 		usage = { "cancel" },
 	},
 	whoami = {
-		summary = "로그인한 GitHub 계정",
+		summary = L("로그인한 GitHub 계정", "The logged in GitHub account"),
 		usage = { "whoami" },
 	},
 	publish = {
-		summary = "Explorer 에서 선택한 패키지를 Wally 에 업로드 (패키지 안의 wally.toml 사용)",
+		summary = L("Explorer 에서 선택한 패키지를 Wally 에 업로드 (패키지 안의 wally.toml 사용)", "Publish the package selected in the Explorer to Wally (uses the wally.toml inside it)"),
 		usage = { "publish [--yes | --no]" },
 		options = {
-			{ "(없음)", "wally.toml 이 없으면 만들어서 열고, 있으면 올릴 내용을 미리보기" },
-			{ "--yes", "방금 미리보기 한 것을 업로드 (login 필요). 같은 버전은 다시 못 올리고 올린 건 못 지움" },
-			{ "--no", "미리보기 한 것을 취소" },
+			{ L("(없음)", "(none)"), L("wally.toml 이 없으면 만들어서 열고, 있으면 올릴 내용을 미리보기", "Creates and opens wally.toml if missing, otherwise previews what will be published") },
+			{ "--yes", L("방금 미리보기 한 것을 업로드 (login 필요). 같은 버전은 다시 못 올리고 올린 건 못 지움", "Publish what was just previewed (needs login). The same version cannot be published twice and published versions cannot be deleted") },
+			{ "--no", L("미리보기 한 것을 취소", "Cancel the preview") },
 		},
 		examples = { "publish", "publish --yes" },
 		notes = {
-			"wally.toml 은 패키지 안의 ModuleScript (업로드할 땐 빠지고 zip 의 wally.toml 이 됨)",
-			"의존성은 [dependencies] 에 적고 코드에서 require(script.Parent.별칭)",
-			"개발할 땐 패키지를 shared 경로 (Packages) 안에 두면 옆의 thunk 로 의존성이 바로 됨",
+			L("wally.toml 은 패키지 안의 ModuleScript (업로드할 땐 빠지고 zip 의 wally.toml 이 됨)", "wally.toml is a ModuleScript inside the package (left out of the upload, it becomes the wally.toml in the zip)"),
+			L("의존성은 [dependencies] 에 적고 코드에서 require(script.Parent.별칭)", "List dependencies under [dependencies] and require them with require(script.Parent.Alias)"),
+			L("개발할 땐 패키지를 shared 경로 (Packages) 안에 두면 옆의 thunk 로 의존성이 바로 됨", "While developing, keep the package inside the shared path (Packages) so the thunks next to it resolve dependencies"),
 		},
 	},
 	privacy = {
-		summary = "개인정보 처리 안내 (토큰을 어디에 저장하고 어디로 보내는지)",
+		summary = L("개인정보 처리 안내 (토큰을 어디에 저장하고 어디로 보내는지)", "Privacy notice (where the token is stored and sent)"),
 		usage = { "privacy" },
 	},
 	terms = {
-		summary = "이용 약관",
+		summary = L("이용 약관", "Terms of use"),
 		usage = { "terms" },
 	},
 	license = {
-		summary = "라이선스와 참고한 프로젝트 고지",
+		summary = L("라이선스와 참고한 프로젝트 고지", "License and notices for referenced projects"),
 		usage = { "license" },
 	},
 	help = {
-		summary = "도움말",
-		usage = { "help", "help <명령어>" },
+		summary = L("도움말", "Help"),
+		usage = { "help", L("help <명령어>", "help <command>") },
 	},
-}
+	}
+end
 
 const INDENT = "    "
 
@@ -348,13 +364,13 @@ const function takeFlags(words: { string }): ({ string }, Flags)
 		elseif word == "--to" then
 			flags.to = words[i + 1]
 			if not flags.to then
-				error("--to 뒤에 경로가 필요함", 0)
+				error(L("--to 뒤에 경로가 필요함", "--to needs a path"), 0)
 			end
 			i += 1
 		elseif word == "--password" or word == "--r" then
 			const value = words[i + 1]
 			if not value then
-				error(`{word} 뒤에 비밀번호가 필요함`, 0)
+				error(L(`{word} 뒤에 비밀번호가 필요함`, `{word} needs a password`), 0)
 			end
 			if word == "--password" then
 				flags.password = value
@@ -381,7 +397,7 @@ const function targetFor(flags: Flags, selectedFallback: boolean?): Instance
 	elseif flags.selected then
 		const target = selected()
 		if not target then
-			error("Explorer 에서 폴더를 선택해주세요", 0)
+			error(L("Explorer 에서 폴더를 선택해주세요", "Select a folder in the Explorer"), 0)
 		end
 		return target
 	elseif flags.server then
@@ -398,13 +414,13 @@ const function targetPathFor(flags: Flags): string
 	if flags.to then
 		const service = string.match(flags.to, "^[^/]+") or ""
 		if not pcall(game.GetService, game, service) then
-			error(`알 수 없는 서비스: {service}`, 0)
+			error(L(`알 수 없는 서비스: {service}`, `Unknown service: {service}`), 0)
 		end
 		return flags.to
 	elseif flags.selected then
 		const target = selected()
 		if not target then
-			error("Explorer 에서 폴더를 선택해주세요", 0)
+			error(L("Explorer 에서 폴더를 선택해주세요", "Select a folder in the Explorer"), 0)
 		end
 		return Config.pathOf(target)
 	elseif flags.server then
@@ -417,7 +433,7 @@ function Commands.add(text: string, flags: Flags, context: Context)
 	-- 버튼을 누를 때 입력창에 "add ..." 를 그대로 써둔 경우
 	const spec, alias = Commands.parseSpec((string.gsub(text, "^%s*[aA][dD][dD]%s+", "")))
 	if spec == "" then
-		error("패키지를 입력해주세요 (예: cayasde/vide-opinionated)", 0)
+		error(L("패키지를 입력해주세요 (예: cayasde/vide-opinionated)", "Enter a package (e.g. cayasde/vide-opinionated)"), 0)
 	end
 	Installer.add(spec, alias, targetPathFor(flags), context.log)
 end
@@ -430,18 +446,18 @@ function Commands.remove(rawText: string, context: Context)
 			Installer.remove(target.Name, Config.pathOf(target.Parent), context.log)
 			return
 		end
-		error("지울 별칭이나 패키지를 입력하거나 Explorer 에서 패키지를 선택해주세요", 0)
+		error(L("지울 별칭이나 패키지를 입력하거나 Explorer 에서 패키지를 선택해주세요", "Enter an alias or package to remove, or select a package in the Explorer"), 0)
 	end
 
 	const matches = Commands.findEntries(text)
 	if #matches == 0 then
-		error(`Config 에 '{trim(text)}' 가 없음 (list 로 확인)`, 0)
+		error(L(`Config 에 '{trim(text)}' 가 없음 (list 로 확인)`, `'{trim(text)}' is not in the Config (see list)`), 0)
 	elseif #matches > 1 then
 		const names = {}
 		for _, entry in matches do
 			table.insert(names, `{entry.alias} ({entry.location})`)
 		end
-		error(`여러 개가 맞음: {table.concat(names, ", ")}. 별칭으로 지정하거나 Explorer 에서 선택해주세요`, 0)
+		error(L(`여러 개가 맞음: {table.concat(names, ", ")}. 별칭으로 지정하거나 Explorer 에서 선택해주세요`, `More than one match: {table.concat(names, ", ")}. Use the alias or select it in the Explorer`), 0)
 	end
 	Installer.remove(matches[1].alias, matches[1].location, context.log)
 end
@@ -450,7 +466,7 @@ function Commands.import(flags: Flags, context: Context, selectedFallback: boole
 	if flags.select then
 		const target = selected()
 		if not target then
-			error("Explorer 에서 가져올 것을 선택해주세요", 0)
+			error(L("Explorer 에서 가져올 것을 선택해주세요", "Select what to import in the Explorer"), 0)
 		end
 		-- --select 일 때 --selected 는 의미가 겹쳐서 설치 위치는 --server / --to 만
 		Installer.importInstance(target, {
@@ -469,13 +485,13 @@ function Commands.resetPath(which: string?, context: Context)
 	end
 	if not which or which == "shared" then
 		Config.setSharedPath(Config.DEFAULT_SHARED)
-		context.log(`shared 경로: {Config.DEFAULT_SHARED} (기본값)`)
+		context.log(L(`shared 경로: {Config.DEFAULT_SHARED} (기본값)`, `shared path: {Config.DEFAULT_SHARED} (default)`))
 	end
 	if not which or which == "server" then
 		Config.setServerPath(Config.DEFAULT_SERVER)
-		context.log(`server 경로: {Config.DEFAULT_SERVER} (기본값)`)
+		context.log(L(`server 경로: {Config.DEFAULT_SERVER} (기본값)`, `server path: {Config.DEFAULT_SERVER} (default)`))
 	end
-	context.log("경로만 바꿈. 이미 설치한 건 install 로 다시 설치해주세요")
+	context.log(L("경로만 바꿈. 이미 설치한 건 install 로 다시 설치해주세요", "Only the path changed. Run install to reinstall"))
 end
 
 function Commands.setPath(kind: string, value: string?, context: Context)
@@ -483,7 +499,7 @@ function Commands.setPath(kind: string, value: string?, context: Context)
 	if path == "" or path == "--selected" then
 		const target = selected()
 		if not target then
-			error("Explorer 에서 폴더를 선택하거나 경로를 입력해주세요", 0)
+			error(L("Explorer 에서 폴더를 선택하거나 경로를 입력해주세요", "Select a folder in the Explorer or enter a path"), 0)
 		end
 		path = Config.pathOf(target)
 	else
@@ -495,15 +511,15 @@ function Commands.setPath(kind: string, value: string?, context: Context)
 	elseif kind == "server" then
 		Config.setServerPath(path)
 	else
-		error("path shared <경로> 또는 path server <경로>", 0)
+		error(L("path shared <경로> 또는 path server <경로>", "path shared <path> or path server <path>"), 0)
 	end
-	context.log(`{kind} 경로: {path}`)
+	context.log(L(`{kind} 경로: {path}`, `{kind} path: {path}`))
 end
 
 -- 트리 출력
 const function printTree(roots: { Tree.Node }, context: Context)
 	if #roots == 0 then
-		context.log("보여줄 의존성이 없음")
+		context.log(L("보여줄 의존성이 없음", "No dependencies to show"))
 		return
 	end
 	for _, line in Tree.lines(roots) do
@@ -565,7 +581,7 @@ const function treeFromInstance(target: Instance): { Tree.Node }
 		table.insert(roots, installed.thunk(thunk))
 	end
 	if #roots == 0 then
-		error(`{target.Name}: wally.toml, thunk, 패키지 폴더 중 하나를 선택해주세요`, 0)
+		error(L(`{target.Name}: wally.toml, thunk, 패키지 폴더 중 하나를 선택해주세요`, `{target.Name}: select a wally.toml, a thunk or a package folder`), 0)
 	end
 	return roots
 end
@@ -574,7 +590,7 @@ function Commands.tree(flags: Flags, context: Context)
 	if flags.selected then
 		const target = selected()
 		if not target then
-			error("Explorer 에서 wally.toml, 패키지, 패키지 폴더 중 하나를 선택해주세요", 0)
+			error(L("Explorer 에서 wally.toml, 패키지, 패키지 폴더 중 하나를 선택해주세요", "Select a wally.toml, a package or a package folder in the Explorer"), 0)
 		end
 		printTree(treeFromInstance(target), context)
 		return
@@ -594,9 +610,9 @@ function Commands.tree(flags: Flags, context: Context)
 		elseif entry.spec then
 			remote = remote or Tree.remote(Installer.resolve)
 			node = remote.spec(entry.alias, entry.spec)
-			node.note = (if node.note then node.note .. " " else "") .. "(설치 안 됨)"
+			node.note = (if node.note then node.note .. " " else "") .. L("(설치 안 됨)", "(not installed)")
 		else
-			node = { alias = entry.alias, label = "직접 넣은 것", note = "(설치 안 됨)", children = {} }
+			node = { alias = entry.alias, label = L("직접 넣은 것", "added by hand"), note = L("(설치 안 됨)", "(not installed)"), children = {} }
 		end
 		if not groups[entry.location] then
 			groups[entry.location] = {}
@@ -605,7 +621,7 @@ function Commands.tree(flags: Flags, context: Context)
 		table.insert(groups[entry.location], node)
 	end
 	if #order == 0 then
-		context.log("Config 에 적힌 패키지가 없음")
+		context.log(L("Config 에 적힌 패키지가 없음", "No packages in the Config"))
 		return
 	end
 	for _, location in order do
@@ -617,7 +633,7 @@ end
 function Commands.list(context: Context)
 	const entries = Config.entries()
 	if #entries == 0 then
-		context.log("설치한 패키지가 없음")
+		context.log(L("설치한 패키지가 없음", "No installed packages"))
 		return
 	end
 	for _, entry in entries do
@@ -636,7 +652,7 @@ function Commands.list(context: Context)
 				.. Fmt.escape(valueText)
 				.. "  "
 				.. Fmt.color("dim", `({Fmt.escape(entry.location)})`)
-				.. (if installed then "" else "  " .. Fmt.color("yellow", "[설치 안 됨]"))
+				.. (if installed then "" else "  " .. Fmt.color("yellow", L("[설치 안 됨]", "[not installed]")))
 		)
 	end
 end
@@ -645,9 +661,9 @@ end
 function Commands.help(context: Context, topic: string?)
 	if topic and topic ~= "" then
 		const name = if topic == "rm" then "remove" elseif topic == "ls" then "list" else string.lower(topic)
-		const entry = HELP[name]
+		const entry = helpEntries()[name]
 		if not entry then
-			error(`알 수 없는 명령어: {topic} (help 로 목록 확인)`, 0)
+			error(L(`알 수 없는 명령어: {topic} (help 로 목록 확인)`, `Unknown command: {topic} (see help)`), 0)
 		end
 
 		context.rich(Fmt.color("green", Fmt.bold(name)))
@@ -680,19 +696,20 @@ function Commands.help(context: Context, topic: string?)
 	end
 
 	context.rich(Fmt.bold("PackageLoader"))
-	context.rich("Wally / GitHub / 파일에서 패키지를 바로 불러옴")
+	context.rich(L("Wally / GitHub / 파일에서 패키지를 바로 불러옴", "Load packages from Wally / pesde / GitHub / files right in Studio"))
 	section(context, "USAGE")
-	context.rich(INDENT .. Fmt.escape("<명령어> [인자] [옵션]"))
-	context.rich(INDENT .. Fmt.escape("<별칭> = <패키지>") .. "     " .. Fmt.color("dim", "명령어 없이 치면 add"))
-	context.rich(INDENT .. Fmt.color("dim", "add 로 Config 에 추가한 뒤 install 로 설치"))
+	context.rich(INDENT .. Fmt.escape(L("<명령어> [인자] [옵션]", "<command> [arguments] [options]")))
+	context.rich(INDENT .. Fmt.escape(L("<별칭> = <패키지>", "<alias> = <package>")) .. "     " .. Fmt.color("dim", L("명령어 없이 치면 add", "Without a command it is add")))
+	context.rich(INDENT .. Fmt.color("dim", L("add 로 Config 에 추가한 뒤 install 로 설치", "add puts it in the Config, install installs it")))
 	section(context, "COMMANDS")
+	const help = helpEntries()
 	const rows = {}
 	for _, name in COMMAND_ORDER do
-		table.insert(rows, { name, HELP[name].summary })
+		table.insert(rows, { name, help[name].summary })
 	end
 	nameRows(context, rows, 10)
 	context.rich("")
-	context.rich(Fmt.color("dim", Fmt.escape("help <명령어> 로 자세히")))
+	context.rich(Fmt.color("dim", Fmt.escape(L("help <명령어> 로 자세히", "help <command> for details"))))
 end
 
 function Commands.openConfig(context: Context)
@@ -700,32 +717,36 @@ function Commands.openConfig(context: Context)
 end
 
 -- 로그인할 때마다 보여주는 주의 사항
-const LOGIN_WARNINGS = {
-	"경고: 토큰은 기본적으로 Studio 를 끌 때까지만 기억하고, 플레이스(Config 등)에는 절대 안 들어감",
-	"경고: --remember / --password 를 붙이면 비밀번호로 암호화해서 이 컴퓨터의 Studio 설정에 저장 (다음에는 login --password). 비밀번호가 짧거나 흔하면 풀릴 수 있음",
-	"경고: 공용 PC 라면 다 쓴 뒤 logout 해주세요",
-	"경고: login <토큰> 은 권한(scope) 없이 만든 토큰을 쓰는 걸 추천",
-	"경고: Wally 업로드(publish --yes)는 되돌릴 수 없음 (같은 버전 재업로드, 삭제 불가)",
-}
+const function loginWarnings(): { string }
+	return {
+	L("경고: 토큰은 기본적으로 Studio 를 끌 때까지만 기억하고, 플레이스(Config 등)에는 절대 안 들어감", "Warning: by default the token is kept until Studio closes and never goes into the place (Config etc.)"),
+	L("경고: --remember / --password 를 붙이면 비밀번호로 암호화해서 이 컴퓨터의 Studio 설정에 저장 (다음에는 login --password). 비밀번호가 짧거나 흔하면 풀릴 수 있음", "Warning: with --remember / --password the token is encrypted with a password and saved in Studio settings on this computer (next time: login --password). A short or common password can be guessed"),
+	L("경고: 공용 PC 라면 다 쓴 뒤 logout 해주세요", "Warning: on a shared computer, run logout when you are done"),
+	L("경고: login <토큰> 은 권한(scope) 없이 만든 토큰을 쓰는 걸 추천", "Warning: for login <token>, use a token made without scopes"),
+	L("경고: Wally 업로드(publish --yes)는 되돌릴 수 없음 (같은 버전 재업로드, 삭제 불가)", "Warning: publishing to Wally (publish --yes) cannot be undone (no re-upload of a version, no delete)"),
+	}
+end
 
-const CANCELLED = "저장 안 함, Studio 를 끄면 로그아웃"
+const function cancelledText(): string
+	return L("저장 안 함, Studio 를 끄면 로그아웃", "not saved, logged out when Studio closes")
+end
 
 -- 저장할 비밀번호: --password / --r 로 적었으면 미리 검사, 아니면 nil (로그인 뒤에 입력창으로 받음)
 const function checkPasswordFlags(flags: Flags): string?
 	if not flags.password then
 		if flags.confirm then
-			error("--r 은 --password 와 같이 써야 함", 0)
+			error(L("--r 은 --password 와 같이 써야 함", "--r must be used with --password"), 0)
 		end
 		return nil
 	end
 	if #flags.password < Auth.MIN_PASSWORD_LENGTH then
-		error(`비밀번호는 {Auth.MIN_PASSWORD_LENGTH}자 이상`, 0)
+		error(L(`비밀번호는 {Auth.MIN_PASSWORD_LENGTH}자 이상`, `Password must be at least {Auth.MIN_PASSWORD_LENGTH} characters`), 0)
 	end
 	if not flags.confirm then
-		error("확인용으로 --r <비밀번호> 도 적어주세요", 0)
+		error(L("확인용으로 --r <비밀번호> 도 적어주세요", "Also add --r <password> to confirm it"), 0)
 	end
 	if flags.confirm ~= flags.password then
-		error("--password 와 --r 의 비밀번호가 다름", 0)
+		error(L("--password 와 --r 의 비밀번호가 다름", "--password and --r do not match"), 0)
 	end
 	return flags.password
 end
@@ -733,35 +754,35 @@ end
 -- 입력창으로 비밀번호를 두 번 받음. 취소하면 nil
 const function askNewPassword(context: Context): string?
 	while true do
-		const password = context.secret(`저장할 비밀번호 ({Auth.MIN_PASSWORD_LENGTH}자 이상, 비우고 Enter 면 저장 안 함)`)
+		const password = context.secret(L(`저장할 비밀번호 ({Auth.MIN_PASSWORD_LENGTH}자 이상, 비우고 Enter 면 저장 안 함)`, `Password to save with ({Auth.MIN_PASSWORD_LENGTH}+ characters, empty Enter to skip saving)`))
 		if not password then
 			return nil
 		end
 		if #password < Auth.MIN_PASSWORD_LENGTH then
-			context.log(`경고: 비밀번호는 {Auth.MIN_PASSWORD_LENGTH}자 이상`)
+			context.log(L(`경고: 비밀번호는 {Auth.MIN_PASSWORD_LENGTH}자 이상`, `Warning: the password must be at least {Auth.MIN_PASSWORD_LENGTH} characters`))
 		else
-			const again = context.secret("비밀번호 한 번 더")
+			const again = context.secret(L("비밀번호 한 번 더", "Password again"))
 			if not again then
 				return nil
 			end
 			if again == password then
 				return password
 			end
-			context.log("경고: 두 비밀번호가 다름. 다시 입력해주세요")
+			context.log(L("경고: 두 비밀번호가 다름. 다시 입력해주세요", "Warning: the passwords do not match. Try again"))
 		end
 	end
 end
 
 -- 저장된 로그인 풀기
 const function unlockSaved(flags: Flags, context: Context)
-	const password = flags.password or context.secret("저장된 로그인의 비밀번호 (비우고 Enter 면 취소)")
+	const password = flags.password or context.secret(L("저장된 로그인의 비밀번호 (비우고 Enter 면 취소)", "Password of the saved login (empty Enter to cancel)"))
 	if not password then
-		context.log("취소함")
+		context.log(L("취소함", "Cancelled"))
 		return
 	end
-	context.log("확인 중: 저장된 로그인을 푸는 중...")
+	context.log(L("확인 중: 저장된 로그인을 푸는 중...", "Checking: unlocking the saved login..."))
 	const seconds = Auth.unlock(password)
-	context.log(`완료: {Auth.whoami()} 로 로그인 (저장된 로그인, {string.format("%.1f", seconds)}초)`)
+	context.log(L(`완료: {Auth.whoami()} 로 로그인 (저장된 로그인, {string.format("%.1f", seconds)}초)`, `Done: logged in as {Auth.whoami()} (saved login, {string.format("%.1f", seconds)}s)`))
 end
 
 -- 로그인할 때마다 주의 사항을 보여주고, --agree 로 동의해야 진행
@@ -769,19 +790,19 @@ end
 function Commands.login(token: string?, flags: Flags, context: Context)
 	if not token and Auth.hasSaved() then
 		if Auth.getToken() then
-			context.log("이미 로그인됨 (whoami). 새로 로그인하려면 logout 후 login --agree")
+			context.log(L("이미 로그인됨 (whoami). 새로 로그인하려면 logout 후 login --agree", "Already logged in (whoami). To log in again: logout, then login --agree"))
 			return
 		end
 		unlockSaved(flags, context)
 		return
 	end
 
-	for _, warning in LOGIN_WARNINGS do
+	for _, warning in loginWarnings() do
 		context.log(warning)
 	end
 	if not flags.agree then
-		context.log("경고: 아직 로그인 안 함. 위 내용과 privacy / terms 를 모두 읽고 동의하면 --agree 를 붙여서 다시 실행해주세요")
-		context.log(if token then "예: login <토큰> --agree" else "예: login --agree")
+		context.log(L("경고: 아직 로그인 안 함. 위 내용과 privacy / terms 를 모두 읽고 동의하면 --agree 를 붙여서 다시 실행해주세요", "Warning: not logged in yet. If you have read and agree to the above and privacy / terms, run it again with --agree"))
+		context.log(if token then L("예: login <토큰> --agree", "e.g. login <token> --agree") else L("예: login --agree", "e.g. login --agree"))
 		return
 	end
 	-- 비밀번호 오타는 로그인 전에 먼저 걸러냄
@@ -794,28 +815,28 @@ function Commands.login(token: string?, flags: Flags, context: Context)
 		const ok, result = pcall(Auth.whoami)
 		if not ok then
 			Auth.clear()
-			error(`토큰이 맞지 않음: {result}`, 0)
+			error(L(`토큰이 맞지 않음: {result}`, `The token does not work: {result}`), 0)
 		end
 		user = result
-		kindText = "토큰, GitHub 요청 한도만 늘어남"
+		kindText = L("토큰, GitHub 요청 한도만 늘어남", "token, only the GitHub request limit goes up")
 	else
 		Auth.deviceLogin(context.log)
 		user = Auth.whoami()
-		kindText = "기기 로그인"
+		kindText = L("기기 로그인", "device login")
 	end
 
-	local saved = "Studio 를 끄면 로그아웃"
+	local saved = L("Studio 를 끄면 로그아웃", "logged out when Studio closes")
 	if presetPassword or flags.remember then
 		const password = presetPassword or askNewPassword(context)
 		if password then
-			context.log("확인 중: 암호화하는 중...")
+			context.log(L("확인 중: 암호화하는 중...", "Checking: encrypting..."))
 			const seconds = Auth.save(password)
-			saved = `비밀번호로 암호화해서 이 컴퓨터에 저장, {string.format("%.1f", seconds)}초. 다음에는 login --password`
+			saved = L(`비밀번호로 암호화해서 이 컴퓨터에 저장, {string.format("%.1f", seconds)}초. 다음에는 login --password`, `saved encrypted on this computer, {string.format("%.1f", seconds)}s. Next time: login --password`)
 		else
-			saved = CANCELLED
+			saved = cancelledText()
 		end
 	end
-	context.log(`완료: {user} 로 로그인 ({kindText}, {saved})`)
+	context.log(L(`완료: {user} 로 로그인 ({kindText}, {saved})`, `Done: logged in as {user} ({kindText}, {saved})`))
 end
 
 -- publish 미리보기 한 것 (publish --yes 가 올릴 것)
@@ -834,12 +855,12 @@ const function previewPublish(prepared: Publisher.Prepared, context: Context)
 	end
 	context.rich("")
 	pendingPublish = prepared
-	context.log(`경고: 아직 안 올림. {prepared.name}@{prepared.version} 을 올리려면 publish --yes, 취소는 publish --no`)
+	context.log(L(`경고: 아직 안 올림. {prepared.name}@{prepared.version} 을 올리려면 publish --yes, 취소는 publish --no`, `Warning: not published yet. publish --yes to publish {prepared.name}@{prepared.version}, publish --no to cancel`))
 end
 
 function Commands.publish(flags: Flags, context: Context)
 	if flags.no then
-		context.log(if pendingPublish then "완료: publish 취소" else "취소할 publish 가 없음")
+		context.log(if pendingPublish then L("완료: publish 취소", "Done: publish cancelled") else L("취소할 publish 가 없음", "No publish to cancel"))
 		pendingPublish = nil
 		return
 	end
@@ -847,32 +868,32 @@ function Commands.publish(flags: Flags, context: Context)
 	if flags.yes then
 		const pending = pendingPublish
 		if not pending then
-			error("먼저 publish 로 미리보기를 확인해주세요", 0)
+			error(L("먼저 publish 로 미리보기를 확인해주세요", "Run publish first and check the preview"), 0)
 		end
 		-- 미리보기 뒤에 바뀌었으면 다시 확인
 		const prepared = Publisher.prepare(pending.source, context.log)
 		if prepared.zip ~= pending.zip then
-			context.log("경고: 미리보기 뒤에 패키지나 wally.toml 이 바뀜. 다시 확인해주세요")
+			context.log(L("경고: 미리보기 뒤에 패키지나 wally.toml 이 바뀜. 다시 확인해주세요", "Warning: the package or wally.toml changed after the preview. Check it again"))
 			previewPublish(prepared, context)
 			return
 		end
-		context.log(`확인 중: {prepared.name}@{prepared.version} 업로드`)
+		context.log(L(`확인 중: {prepared.name}@{prepared.version} 업로드`, `Checking: publishing {prepared.name}@{prepared.version}`))
 		Publisher.upload(prepared)
 		pendingPublish = nil
-		context.log(`완료: {prepared.name}@{prepared.version} 업로드`)
+		context.log(L(`완료: {prepared.name}@{prepared.version} 업로드`, `Done: published {prepared.name}@{prepared.version}`))
 		return
 	end
 
 	const target = selected()
 	if not target then
-		error("Explorer 에서 올릴 패키지를 선택해주세요 (보통 패키지 ModuleScript)", 0)
+		error(L("Explorer 에서 올릴 패키지를 선택해주세요 (보통 패키지 ModuleScript)", "Select the package to publish in the Explorer (usually the package ModuleScript)"), 0)
 	end
 	const source = Publisher.findSource(target)
 	if not Publisher.getManifest(source) then
 		const login = if Auth.getToken() then select(2, pcall(Auth.whoami)) else nil
 		const manifest = Publisher.createManifest(source, if type(login) == "string" then login else nil)
 		context.plugin:OpenScript(manifest)
-		context.log(`완료: {source.Name} 안에 {Publisher.MANIFEST_NAME} 을 만듦. name / version 등을 채운 뒤 다시 publish`)
+		context.log(L(`완료: {source.Name} 안에 {Publisher.MANIFEST_NAME} 을 만듦. name / version 등을 채운 뒤 다시 publish`, `Done: created {Publisher.MANIFEST_NAME} in {source.Name}. Fill in name / version etc. and run publish again`))
 		return
 	end
 	previewPublish(Publisher.prepare(source, context.log), context)
@@ -922,9 +943,20 @@ function Commands.run(line: string, context: Context)
 		Commands.list(context)
 	elseif command == "prune" then
 		Installer.prune(context.log)
-		context.log("정리 완료")
+		context.log(L("정리 완료", "Prune done"))
 	elseif command == "config" then
 		Commands.openConfig(context)
+	elseif command == "lang" then
+		const choice = string.lower(args[1] or "")
+		if choice == "ko" or choice == "en" then
+			Locale.set(choice :: any)
+		elseif choice == "auto" then
+			Locale.set(nil)
+		elseif choice ~= "" then
+			error(L("lang ko / lang en / lang auto", "lang ko / lang en / lang auto"), 0)
+		end
+		const name = if Locale.get() == "ko" then "한국어" else "English"
+		context.log(L(`언어: {name}{if Locale.isAuto() then " (Studio 언어를 따라감)" else ""}`, `Language: {name}{if Locale.isAuto() then " (follows Studio)" else ""}`))
 	elseif command == "clear" then
 		context.clear()
 	elseif command == "login" then
@@ -934,22 +966,22 @@ function Commands.run(line: string, context: Context)
 			Auth.clear(true)
 			context.log(
 				if Auth.hasSaved()
-					then "완료: 로그아웃 (저장된 토큰은 남김, login --password 로 다시 풂)"
-					else "완료: 로그아웃 (저장된 토큰 없음)"
+					then L("완료: 로그아웃 (저장된 토큰은 남김, login --password 로 다시 풂)", "Done: logged out (saved token kept, unlock with login --password)")
+					else L("완료: 로그아웃 (저장된 토큰 없음)", "Done: logged out (no saved token)")
 			)
 		else
 			Auth.clear()
-			context.log("완료: 로그아웃 (저장된 토큰도 삭제)")
+			context.log(L("완료: 로그아웃 (저장된 토큰도 삭제)", "Done: logged out (saved token deleted)"))
 		end
 	elseif command == "cancel" then
 		if Auth.cancelLogin() then
-			context.log("취소 요청함. 곧 멈춤")
+			context.log(L("취소 요청함. 곧 멈춤", "Cancel requested. Stopping soon"))
 		else
-			context.log("취소할 작업이 없음")
+			context.log(L("취소할 작업이 없음", "Nothing to cancel"))
 		end
 	elseif command == "whoami" then
 		context.log(
-			`로그인: {Auth.whoami()} ({if Auth.kind() == "device" then "기기 로그인" else "토큰"}, {if Auth.isRemembered() then "암호화해서 이 컴퓨터에 저장됨" else "Studio 를 끄면 로그아웃"})`
+			`{L("로그인", "Logged in")}: {Auth.whoami()} ({if Auth.kind() == "device" then L("기기 로그인", "device login") else L("토큰", "token")}, {if Auth.isRemembered() then L("암호화해서 이 컴퓨터에 저장됨", "saved encrypted on this computer") else L("Studio 를 끄면 로그아웃", "logged out when Studio closes")})`
 		)
 	elseif command == "publish" then
 		Commands.publish(flags, context)
