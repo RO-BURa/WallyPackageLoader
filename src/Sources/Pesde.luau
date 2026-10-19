@@ -71,9 +71,38 @@ function Pesde.archiveUrl(scope: string, name: string, version: string, target: 
 	return `{packagePath(string.lower(scope), string.lower(name))}/{HttpService:UrlEncode(version)}/{target}/archive`
 end
 
+const function isGzip(data: string): boolean
+	return string.byte(data, 1) == 31 and string.byte(data, 2) == 139
+end
+
+-- tar 헤더처럼 생겼는지 (ustar 표시, 또는 512 바이트 단위 + 크기 칸이 8진수)
+const function isTar(data: string): boolean
+	if string.sub(data, 258, 262) == "ustar" then
+		return true
+	end
+	return #data >= 512 and #data % 512 == 0 and string.match(string.sub(data, 125, 135), "^[0-7 ]+$") ~= nil
+end
+
+-- 받은 것의 앞부분 (오류 메시지용, 글자만)
+const function preview(data: string): string
+	return (string.gsub(string.sub(data, 1, 80), "[%c\128-\255]", "?"))
+end
+
 -- .tar.gz -> 경로 -> 내용
+--   Studio 가 Content-Encoding: gzip 을 미리 풀어서 tar 로 줄 수도 있어서 둘 다 받음
 function Pesde.download(url: string): { [string]: string }
-	return Tar.extract(Inflate.gunzip(Http.get(url)))
+	local data = Http.get(url)
+	-- 두 번 압축된 경우도 있어서 gzip 이면 계속 풂
+	for _ = 1, 3 do
+		if not isGzip(data) then
+			break
+		end
+		data = Inflate.gunzip(data)
+	end
+	if not isTar(data) then
+		error(`pesde: 받은 파일이 tar.gz 가 아님 ({#data} bytes, 앞부분: {preview(data)})`, 0)
+	end
+	return Tar.extract(data)
 end
 
 function Pesde.resolve(scope: string, name: string, rangeText: string?): Package

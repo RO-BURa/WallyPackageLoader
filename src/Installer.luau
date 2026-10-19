@@ -113,7 +113,7 @@ placePackage = function(context: Context, package: Package, root: Instance): (In
 		existing:Destroy()
 	end
 
-	context.log(`받는 중: {package.scope}/{package.name}@{package.version}`)
+	context.log(`받는 중: {if package.source == "pesde" then "pesde:" else ""}{package.scope}/{package.name}@{package.version}`)
 	const vfs = package.fetch()
 	const packageInstance = Builder.buildPackage(vfs, package.name, package.entryPath)
 	if not packageInstance then
