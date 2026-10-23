@@ -21,6 +21,8 @@ Linker.LINK_ATTRIBUTE = LINK_ATTRIBUTE
 Linker.ENTRY_ATTRIBUTE = ENTRY_ATTRIBUTE
 -- ModuleScript 가 아닌 Instance 를 설치 위치에 바로 복사한 것 표시
 Linker.COPY_ATTRIBUTE = "PackageLoaderCopy"
+-- 엔트리가 어디서 온 패키지인지 ("wally" / "pesde" / "github" / "file")
+Linker.SOURCE_ATTRIBUTE = "PackageLoaderSource"
 
 -- 플러그인이 설치 위치에 만든 것 (thunk 또는 복사본)
 function Linker.isManaged(instance: Instance): boolean

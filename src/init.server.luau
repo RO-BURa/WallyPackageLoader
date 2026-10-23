@@ -1,7 +1,8 @@
--- Wally, GitHub(pesde 방식), 파일에서 패키지를 바로 불러오는 플러그인
+-- Wally, pesde, GitHub, 파일에서 패키지를 바로 불러오는 플러그인
 
 const Auth = require(script.Auth)
 const Locale = require(script.Locale)
+const ManageUi = require(script.ManageUi)
 const SearchUi = require(script.SearchUi)
 const Ui = require(script.Ui)
 
@@ -10,6 +11,7 @@ const L = Locale.L
 -- 툴바 아이콘 (업로드한 Decal 86460136593495 / 132302594577680 의 이미지 ID)
 const PACKAGES_ICON = "rbxassetid://94108074565091"
 const SEARCH_ICON = "rbxassetid://118685771787843"
+const MANAGE_ICON = "rbxassetid://92487039142919"
 
 Locale.init(plugin)
 Auth.init(plugin)
@@ -55,4 +57,25 @@ searchWidget:GetPropertyChangedSignal("Enabled"):Connect(function()
 	searchButton:SetActive(searchWidget.Enabled)
 end)
 
-SearchUi.mount(searchWidget, plugin)
+const search = SearchUi.mount(searchWidget, plugin)
+
+-- 관리 창 (설치한 패키지, 업데이트, 트리, 라이선스)
+const manageButton = toolbar:CreateButton("Manage", L("설치한 패키지 관리, 업데이트", "Manage installed packages and updates"), MANAGE_ICON)
+manageButton.ClickableWhenViewportHidden = true
+
+const manageWidget = plugin:CreateDockWidgetPluginGui(
+	"WallyPackageLoaderManage",
+	DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Right, false, false, 420, 480, 300, 300)
+)
+manageWidget.Title = "Package Manager"
+manageWidget.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+manageWidget.Name = "WallyPackageLoaderManage"
+
+manageButton.Click:Connect(function()
+	manageWidget.Enabled = not manageWidget.Enabled
+end)
+manageWidget:GetPropertyChangedSignal("Enabled"):Connect(function()
+	manageButton:SetActive(manageWidget.Enabled)
+end)
+
+ManageUi.mount(manageWidget, plugin, search)

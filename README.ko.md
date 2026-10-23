@@ -41,6 +41,9 @@ path server <경로 | --selected>       server 경로 설정
 path reset [shared | server]          기본 경로로 되돌리기 (뒤에 없으면 둘 다, path shared --reset 도 됨)
 list                                  설치한 패키지 목록
 tree [--selected]                     의존성 트리 (Config 기준 / 선택한 wally.toml, thunk, 패키지 폴더 기준)
+outdated                              새 버전이 나온 패키지 (MAJOR = 메이저 버전이 바뀜)
+update <별칭> | update --all [--major]   최신 버전으로 (--all 은 --major 가 없으면 MAJOR 는 건너뜀)
+licenses                              설치된 패키지 (의존성 포함) 의 라이선스
 prune                                 안 쓰는 _Index 폴더 정리
 config                                Config 스크립트 열기
 login --agree [--remember]            GitHub 기기 로그인 (Wally 업로드 + GitHub 요청 한도)
@@ -101,6 +104,15 @@ help [명령어]                         도움말 (help add 처럼 자세히)
   - Files: 파일 목록, 파일을 누르면 내용 (Back to Info / Back to Files 로 돌아감). Wally / pesde 는 패키지를 받아서, GitHub 은 누른 파일만 받아서 보여줍니다
   - 본문과 Config 줄 칸은 선택해서 복사할 수 있습니다
 - 아이콘은 Studio 에 들어 있는 Roblox Builder Icons 폰트를 씁니다
+
+### 관리 창 (Manage)
+툴바의 **Manage** 버튼으로 엽니다. 열 때마다 업데이트를 확인합니다 (⟳ 로 다시 확인).
+- **Installed**: Config 에 적힌 것을 위치별 (Shared / Server / custom 폴더) 로 묶어서, 출처 로고 / 버전 / 출처와 함께
+- **Updates**: 새 버전이 있는 것만. `지금 → 최신`, 메이저가 바뀌면 **● Major**
+- **Update** 는 하나 (Config 수정 + 설치), **Update all** 은 Major 를 뺀 전부
+- **⋯**: View (Search 창에서 그 패키지 상세), Reinstall, Remove. 줄을 눌러도 View
+- **Tree** / **Licenses** 탭: `tree` / `licenses` 결과를 창 안에
+- 창이 좁으면 Source 열은 숨기고 이름 앞 로고로만 보여줍니다
 
 ### 버튼
 | 버튼 | 동작 |
@@ -182,6 +194,9 @@ rojo build --plugin WallyPackageLoader.rbxm
 | `src/init.server.luau` | 툴바 버튼, DockWidget |
 | `src/Ui.luau` | 메인 창 UI |
 | `src/SearchUi.luau` | 검색 창 UI |
+| `src/ManageUi.luau` | 관리 창 UI |
+| `src/Widgets.luau` | 공용 UI 조각 (테마 색, 버튼, 출처 로고) |
+| `src/Updates.luau` | 업데이트 확인 / 적용, 라이선스 목록 |
 | `src/Locale.luau` | 한국어 / 영어 |
 | `src/Tree.luau` | 의존성 트리 |
 | `src/Installer.luau` | 스펙 해석, 의존성 재귀 설치, Config 저장, 정리 |

@@ -42,6 +42,9 @@ path server <path | --selected>       set the server path
 path reset [shared | server]          back to the default path (both when nothing follows, path shared --reset works too)
 list                                  list installed packages
 tree [--selected]                     dependency tree (from the Config / from a selected wally.toml, thunk or package folder)
+outdated                              packages with newer versions (MAJOR = the major version changes)
+update <alias> | update --all [--major]   update to the latest version (--all skips MAJOR unless --major)
+licenses                              licenses of installed packages (dependencies too)
 prune                                 remove unused _Index folders
 config                                open the Config script
 login --agree [--remember]            GitHub device login (Wally publishing + higher GitHub request limit)
@@ -102,6 +105,15 @@ Open it with the **Search** toolbar button. Type a search word and press Enter (
   - Files: click a file to view it (Back to Info / Back to Files to go back). Wally / pesde download the package, GitHub fetches only the clicked file
   - The text and the Config line box can be selected and copied
 - Icons use the Roblox Builder Icons font that ships with Studio
+
+### Manage window
+Open it with the **Manage** toolbar button. It checks for updates every time it opens (⟳ to check again).
+- **Installed**: everything in the Config grouped by location (Shared / Server / custom folders), with source logo, version and source
+- **Updates**: only packages with a newer version. `current → latest`, **● Major** when the major version changes
+- **Update** updates one package (Config + install), **Update all** updates everything except Major
+- **⋯**: View (opens the package in the Search window), Reinstall, Remove. Clicking a row also opens View
+- **Tree** / **Licenses** tabs show `tree` / `licenses` in the window
+- In a narrow window the Source column is hidden; the logo before the name still shows it
 
 ### Buttons
 | Button | Action |
@@ -181,6 +193,9 @@ On first use Studio asks for HTTP access (api.wally.run, registry.pesde.daimond1
 | `src/init.server.luau` | Toolbar buttons, DockWidgets |
 | `src/Ui.luau` | Main window UI |
 | `src/SearchUi.luau` | Search window UI |
+| `src/ManageUi.luau` | Manage window UI |
+| `src/Widgets.luau` | Shared UI pieces (theme colors, buttons, source logos) |
+| `src/Updates.luau` | Update checks / updating, license list |
 | `src/Locale.luau` | Korean / English |
 | `src/Tree.luau` | Dependency tree |
 | `src/Installer.luau` | Spec resolving, recursive install, Config updates, prune |
