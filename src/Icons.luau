@@ -1,5 +1,6 @@
 -- Roblox Builder Icons (Studio 에 들어 있는 아이콘 폰트, 이름을 글자로 쓰면 아이콘이 됨)
---   쓰는 것: square-check, square, square-minus, star, gear, magnifying-glass, chevron-large-left, chevron-small-down, plus-small, folder
+--   쓰는 것: square-check, square, square-minus, star, gear, magnifying-glass, chevron-large-left, chevron-small-down, plus-small, folder,
+--   github, file-box, circle-i, three-dots-horizontal, stackable-check, arrow-rotate-right, three-box-flowchart, document-list-heart
 --   Regular / Filled(굵게) 두 가지
 
 const Icons = {}

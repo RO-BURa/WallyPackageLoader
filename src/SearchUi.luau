@@ -9,12 +9,20 @@ const Icons = require(script.Parent.Icons)
 const Log = require(script.Parent.Log)
 const Details = require(script.Parent.Sources.Details)
 const Search = require(script.Parent.Sources.Search)
+const Widgets = require(script.Parent.Widgets)
+
+const themeColor = Widgets.themeColor
+const isDarkTheme = Widgets.isDarkTheme
+const make = Widgets.make
+const textButton = Widgets.textButton
+const iconButton = Widgets.iconButton
+const inputBox = Widgets.inputBox
+const scrollFrame = Widgets.scrollFrame
 
 const SearchUi = {}
 
 const SETTINGS_KEY = "RO_BURa.WallyPackageLoader.Search"
 const ROW_HEIGHT = 58
-const ICON_SIZE = 16
 
 type Settings = {
 	wally: boolean,
@@ -25,15 +33,6 @@ type Settings = {
 }
 
 const DEFAULT_SETTINGS: Settings = { wally = true, pesde = false, github = false, luauOnly = true, author = "" }
-
-const function themeColor(color: Enum.StudioStyleGuideColor): Color3
-	return settings().Studio.Theme:GetColor(color)
-end
-
-const function isDarkTheme(): boolean
-	const background = themeColor(Enum.StudioStyleGuideColor.MainBackground)
-	return (background.R + background.G + background.B) / 3 < 0.5
-end
 
 -- 스펙 -> 패키지 구분용 키 (버전 무시): "wally:scope/name", "pesde:scope/name", "github:owner/repo"
 const function packageKey(spec: string): string
@@ -70,107 +69,11 @@ const function starMarkup(stars: number, starredByMe: boolean): string
 	return if stars > 0 or starredByMe then Fmt.color("yellow", text) else Fmt.color("dim", text)
 end
 
-const function make(className: string, props: { [string]: any }, children: { Instance }?): Instance
-	const instance = Instance.new(className)
-	for key, value in props do
-		(instance :: any)[key] = value
-	end
-	for _, child in children or {} do
-		child.Parent = instance
-	end
-	return instance
-end
+export type Controller = {
+	open: (result: Search.Result) -> (),
+}
 
-const function textButton(props: { [string]: any }): TextButton
-	const merged = {
-		Font = Enum.Font.SourceSansSemibold,
-		TextSize = 15,
-		AutoButtonColor = true,
-		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.Button),
-		TextColor3 = themeColor(Enum.StudioStyleGuideColor.ButtonText),
-		BorderColor3 = themeColor(Enum.StudioStyleGuideColor.ButtonBorder),
-	}
-	for key, value in props do
-		merged[key] = value
-	end
-	return make("TextButton", merged) :: TextButton
-end
-
--- 아이콘 + 글자 버튼 (가로로 자동 크기)
-const function iconButton(icon: string, text: string, props: { [string]: any }): (TextButton, TextLabel, TextLabel)
-	const button = textButton(props)
-	button.Text = ""
-	if not props.Size then
-		button.Size = UDim2.new(0, 0, 0, 24)
-		button.AutomaticSize = Enum.AutomaticSize.X
-	end
-	make("UIListLayout", {
-		FillDirection = Enum.FillDirection.Horizontal,
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-		HorizontalAlignment = if text == "" then Enum.HorizontalAlignment.Center else Enum.HorizontalAlignment.Left,
-		Padding = UDim.new(0, 4),
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Parent = button,
-	})
-	make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6), Parent = button })
-	const iconLabel = Icons.label(icon, ICON_SIZE, false, {
-		LayoutOrder = 1,
-		TextColor3 = themeColor(Enum.StudioStyleGuideColor.ButtonText),
-		Parent = button,
-	})
-	const textLabel = make("TextLabel", {
-		LayoutOrder = 2,
-		Visible = text ~= "",
-		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(0, 20),
-		AutomaticSize = Enum.AutomaticSize.X,
-		Text = text,
-		Font = Enum.Font.SourceSansSemibold,
-		TextSize = 15,
-		TextColor3 = themeColor(Enum.StudioStyleGuideColor.ButtonText),
-		Parent = button,
-	}) :: TextLabel
-	return button, iconLabel, textLabel
-end
-
-const function inputBox(props: { [string]: any }): TextBox
-	const merged = {
-		Text = "",
-		ClearTextOnFocus = false,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Font = Enum.Font.Code,
-		TextSize = 14,
-		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.InputFieldBackground),
-		TextColor3 = themeColor(Enum.StudioStyleGuideColor.MainText),
-		PlaceholderColor3 = themeColor(Enum.StudioStyleGuideColor.DimmedText),
-		BorderColor3 = themeColor(Enum.StudioStyleGuideColor.InputFieldBorder),
-	}
-	for key, value in props do
-		merged[key] = value
-	end
-	return make("TextBox", merged, {
-		make("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }),
-	}) :: TextBox
-end
-
-const function scrollFrame(props: { [string]: any }): ScrollingFrame
-	const merged = {
-		CanvasSize = UDim2.new(),
-		ScrollingDirection = Enum.ScrollingDirection.Y,
-		ScrollBarThickness = 8,
-		ScrollBarImageColor3 = themeColor(Enum.StudioStyleGuideColor.ScrollBar),
-		VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
-		BorderSizePixel = 1,
-		BorderColor3 = themeColor(Enum.StudioStyleGuideColor.Border),
-		BackgroundColor3 = themeColor(Enum.StudioStyleGuideColor.ScriptBackground),
-	}
-	for key, value in props do
-		merged[key] = value
-	end
-	return make("ScrollingFrame", merged) :: ScrollingFrame
-end
-
-function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
+function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin): Controller
 	-- 설정 (이 컴퓨터에 저장)
 	const saved = plugin:GetSetting(SETTINGS_KEY)
 	const current: Settings = table.clone(DEFAULT_SETTINGS)
@@ -934,9 +837,11 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			Text = "",
 			Parent = list,
 		}) :: TextButton
+		-- 출처 로고 + 이름
+		Widgets.sourceIcon(result.source, 14, { Position = UDim2.fromOffset(6, 6), Parent = item })
 		const titleLabel = make("TextLabel", {
-			Position = UDim2.fromOffset(6, 4),
-			Size = UDim2.new(1, -80, 0, 18),
+			Position = UDim2.fromOffset(26, 4),
+			Size = UDim2.new(1, -100, 0, 18),
 			BackgroundTransparency = 1,
 			RichText = true,
 			Font = Enum.Font.Code,
@@ -958,8 +863,7 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 			Position = UDim2.fromOffset(6, 22),
 			Size = UDim2.new(1, -80, 0, 32),
 			BackgroundTransparency = 1,
-			Text = (if result.source == "github" then "[GitHub] " elseif result.source == "pesde" then "[pesde] " else "[Wally] ")
-				.. (if result.description ~= "" then result.description else L("(설명 없음)", "(no description)")),
+			Text = if result.description ~= "" then result.description else L("(설명 없음)", "(no description)"),
 			Font = Enum.Font.SourceSans,
 			TextSize = 14,
 			TextWrapped = true,
@@ -1056,6 +960,14 @@ function SearchUi.mount(widget: DockWidgetPluginGui, plugin: Plugin)
 	end)
 
 	root.Parent = widget
+
+	-- 다른 창 (Manage) 에서 이 창의 상세 화면을 열 때
+	return {
+		open = function(result: Search.Result)
+			widget.Enabled = true
+			openDetail(result)
+		end,
+	}
 end
 
 return SearchUi

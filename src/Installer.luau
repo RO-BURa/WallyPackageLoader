@@ -124,6 +124,8 @@ placePackage = function(context: Context, package: Package, root: Instance): (In
 	const entry = Instance.new("Folder")
 	entry.Name = entryName
 	entry:SetAttribute(Linker.ENTRY_ATTRIBUTE, true)
+	-- 어디서 온 패키지인지 (licenses / Manage 창에서 씀)
+	entry:SetAttribute(Linker.SOURCE_ATTRIBUTE, package.source)
 	packageInstance.Parent = entry
 	entry.Parent = index
 	table.insert(context.created, entry)

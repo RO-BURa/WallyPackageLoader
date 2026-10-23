@@ -12,6 +12,7 @@ const LicenseText = require(script.Parent.LicenseText)
 const Linker = require(script.Parent.Linker)
 const Locale = require(script.Parent.Locale)
 const Tree = require(script.Parent.Tree)
+const Updates = require(script.Parent.Updates)
 
 export type Context = {
 	plugin: Plugin,
@@ -40,6 +41,9 @@ export type Flags = {
 	select: boolean?,
 	-- path 용 (기본 경로로 되돌림)
 	reset: boolean?,
+	-- update 용 (전부 / 메이저 업데이트도)
+	all: boolean?,
+	major: boolean?,
 	-- 저장할 / 풀 비밀번호와 확인용 (--password <비밀번호> --r <비밀번호>)
 	password: string?,
 	confirm: string?,
@@ -64,6 +68,9 @@ const COMMAND_ORDER = {
 	"path",
 	"list",
 	"tree",
+	"outdated",
+	"update",
+	"licenses",
 	"prune",
 	"config",
 	"login",
@@ -155,6 +162,28 @@ const function helpEntries(): { [string]: HelpEntry }
 	list = {
 		summary = L("설치한 패키지 목록 (ls)", "List installed packages (ls)"),
 		usage = { "list" },
+	},
+	outdated = {
+		summary = L("새 버전이 나온 패키지 확인", "Check for packages with newer versions"),
+		usage = { "outdated" },
+		notes = {
+			L("MAJOR: 메이저 버전이 바뀌는 업데이트 (0.x 는 두 번째 숫자). 호환이 깨질 수 있음", "MAJOR: the major version changes (the second number for 0.x). It may break compatibility"),
+			L("브랜치 / 커밋으로 고정한 GitHub 패키지와 직접 가져온 것은 확인하지 않음", "GitHub packages pinned to a branch / commit and imported ones are not checked"),
+		},
+	},
+	update = {
+		summary = L("패키지를 최신 버전으로 (Config 를 고치고 설치)", "Update packages to the latest version (edits the Config and installs)"),
+		usage = { L("update <별칭>", "update <alias>"), "update --all [--major]" },
+		options = {
+			{ "<alias>", L("그 패키지만 (MAJOR 여도 업데이트)", "Only that package (even a MAJOR update)") },
+			{ "--all", L("전부, MAJOR 는 빼고", "Everything except MAJOR updates") },
+			{ "--major", L("--all 에 MAJOR 도 포함", "Include MAJOR updates in --all") },
+		},
+		notes = { L("^ / ~ 로 적었으면 그대로 두고 버전만 바꿈 (^2.0.1 -> ^2.1.0)", "^ / ~ are kept and only the version changes (^2.0.1 -> ^2.1.0)") },
+	},
+	licenses = {
+		summary = L("설치된 패키지 (의존성 포함) 의 라이선스", "Licenses of installed packages (dependencies too)"),
+		usage = { "licenses" },
 	},
 	tree = {
 		summary = L("의존성 트리", "Dependency tree"),
@@ -361,6 +390,10 @@ const function takeFlags(words: { string }): ({ string }, Flags)
 			flags.select = true
 		elseif word == "--reset" then
 			flags.reset = true
+		elseif word == "--all" then
+			flags.all = true
+		elseif word == "--major" then
+			flags.major = true
 		elseif word == "--to" then
 			flags.to = words[i + 1]
 			if not flags.to then
@@ -627,6 +660,92 @@ function Commands.tree(flags: Flags, context: Context)
 	for _, location in order do
 		section(context, location)
 		printTree(groups[location], context)
+	end
+end
+
+-- 업데이트 확인 결과 한 줄
+const function statusLine(status: Updates.Status): string
+	local text = Fmt.bold(Fmt.escape(status.alias)) .. "  " .. Fmt.color("dim", Fmt.escape(status.id))
+	if status.error then
+		return text .. "  " .. Fmt.color("red", L("확인 실패: ", "check failed: ") .. Fmt.escape(status.error))
+	end
+	if status.newSpec then
+		text ..= `  {Fmt.escape(status.current or "?")} -> ` .. Fmt.color("green", Fmt.escape(status.latest or "?"))
+		if status.major then
+			text ..= "  " .. Fmt.color("yellow", "MAJOR")
+		end
+		return text
+	end
+	return text .. "  " .. Fmt.escape(status.current or status.latest or "?") .. "  " .. Fmt.color("dim", L("최신", "latest"))
+end
+
+function Commands.outdated(context: Context)
+	context.log(L("확인 중: 최신 버전", "Checking: latest versions"))
+	const statuses = Updates.check()
+	local count = 0
+	for _, status in statuses do
+		if not status.skipped then
+			context.rich(INDENT .. statusLine(status))
+			if status.newSpec then
+				count += 1
+			end
+		end
+	end
+	if count == 0 then
+		context.log(L("완료: 모두 최신", "Done: everything is up to date"))
+	else
+		context.log(L(`완료: 업데이트 {count}개 (update --all 또는 update <별칭>)`, `Done: {count} updates (update --all or update <alias>)`))
+	end
+end
+
+function Commands.update(target: string?, flags: Flags, context: Context)
+	if not target and not flags.all then
+		error(L("update <별칭> 또는 update --all", "update <alias> or update --all"), 0)
+	end
+	context.log(L("확인 중: 최신 버전", "Checking: latest versions"))
+	const statuses = Updates.check()
+	local updated = 0
+	local skippedMajor = 0
+	local found = false
+	for _, status in statuses do
+		const matches = flags.all or string.lower(status.alias) == string.lower(target or "")
+		if matches then
+			found = true
+			if status.error then
+				context.log(L(`실패: {status.alias} - {status.error}`, `Failed: {status.alias} - {status.error}`))
+			elseif status.newSpec then
+				if status.major and flags.all and not flags.major then
+					skippedMajor += 1
+				else
+					Updates.apply(status, context.log)
+					updated += 1
+				end
+			end
+		end
+	end
+	if not found then
+		error(L(`Config 에 '{target}' 가 없음 (list 로 확인)`, `'{target}' is not in the Config (see list)`), 0)
+	end
+	Installer.prune(context.log)
+	context.log(L(`완료: {updated}개 업데이트`, `Done: {updated} updated`)
+		.. (if skippedMajor > 0 then L(`, MAJOR {skippedMajor}개는 건너뜀 (--major)`, `, skipped {skippedMajor} MAJOR (--major)`) else ""))
+end
+
+function Commands.licenses(context: Context)
+	context.log(L("확인 중: 라이선스", "Checking: licenses"))
+	const list = Updates.licenses()
+	if #list == 0 then
+		context.log(L("설치된 패키지가 없음", "No installed packages"))
+		return
+	end
+	for _, item in list do
+		context.rich(
+			INDENT
+				.. Fmt.bold(Fmt.escape(item.id))
+				.. Fmt.color("dim", "@" .. Fmt.escape(item.version) .. " (" .. item.source .. ")")
+				.. "  "
+				.. (if item.license then Fmt.escape(item.license :: string) else Fmt.color("yellow", L("모름", "unknown")))
+		)
 	end
 end
 
@@ -937,6 +1056,12 @@ function Commands.run(line: string, context: Context)
 		else
 			Commands.setPath(first, if flags.selected then "--selected" else args[2], context)
 		end
+	elseif command == "outdated" then
+		Commands.outdated(context)
+	elseif command == "update" then
+		Commands.update(args[1], flags, context)
+	elseif command == "licenses" then
+		Commands.licenses(context)
 	elseif command == "tree" then
 		Commands.tree(flags, context)
 	elseif command == "list" or command == "ls" then
