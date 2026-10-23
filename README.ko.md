@@ -170,7 +170,7 @@ ReplicatedStorage/Packages/
 ```
 
 ## 설치
-1. [Releases](https://github.com/RO-BURa/WallyPackageLoader/releases) 에서 최신 `WallyPackageLoader.rbxm` 을 받습니다.
+1. [Releases](https://github.com/RO-BURa/wally-package-loader-plugin/releases) 에서 최신 `WallyPackageLoader.rbxm` 을 받습니다.
 2. Studio 에서 **Plugins → Plugins Folder** 를 눌러 열린 폴더에 넣습니다.
 3. Studio 를 다시 열면 툴바에 버튼이 생깁니다.
 
