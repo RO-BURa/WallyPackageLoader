@@ -170,7 +170,7 @@ ReplicatedStorage/Packages/
 ```
 
 ## Installation
-1. Download the latest `WallyPackageLoader.rbxm` from [Releases](https://github.com/RO-BURa/WallyPackageLoader/releases).
+1. Download the latest `WallyPackageLoader.rbxm` from [Releases](https://github.com/RO-BURa/wally-package-loader-plugin/releases).
 2. In Studio, click **Plugins → Plugins Folder** and put it in the folder that opens.
 3. Reopen Studio and the buttons appear in the toolbar.
 
